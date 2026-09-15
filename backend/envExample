@@ -1,0 +1,15 @@
+# Copiar este archivo a .env y completar los valores para desarrollo local.
+# .env NO se versiona (ver .gitignore).
+
+NODE_ENV=development
+PORT=3000
+
+# Debe coincidir con lo que expone docker-compose.yml en la raíz del repo.
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_USER=ecommerce
+DATABASE_PASSWORD=ecommerce
+DATABASE_NAME=ecommerce
+
+# Origen permitido por CORS para las requests del frontend (Vite).
+CORS_ORIGIN=http://localhost:5173

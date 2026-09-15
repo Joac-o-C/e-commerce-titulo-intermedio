@@ -1,0 +1,29 @@
+# Dependencias
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Variables de entorno reales (envExample sí se versiona)
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+*.log
+
+# Cobertura / reportes de test
+coverage/
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Datos locales de Docker (además del volumen nombrado)
+postgres-data/
+*.tsbuildinfo
