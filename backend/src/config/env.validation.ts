@@ -20,6 +20,10 @@ export const envValidationSchema = Joi.object({
 
   CORS_ORIGIN: Joi.string().default('http://localhost:5173'),
 
+  // CU-16: URL base pública con la que se arma el link a cada imagen de
+  // producto guardada por LocalStorageService (ver uploads/ servido en main.ts).
+  PUBLIC_ASSETS_URL: Joi.string().default('http://localhost:3000'),
+
   // Secrets separados para access y refresh: si se compromete uno no sirve
   // para forjar el otro, y permite rotarlos de forma independiente.
   JWT_ACCESS_SECRET: Joi.string().min(32).required(),

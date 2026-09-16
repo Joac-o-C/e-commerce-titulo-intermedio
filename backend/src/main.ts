@@ -1,13 +1,19 @@
+import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // El refresh token viaja en una cookie httpOnly (ver AuthController).
   app.use(cookieParser());
+
+  // CU-16: las imágenes de producto subidas por LocalStorageService quedan
+  // en disco y se sirven como estáticas bajo /uploads.
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
 
   // El servidor nunca confía en la forma exacta de lo que envía el
   // cliente: rechaza campos no declarados en el DTO y aplica las

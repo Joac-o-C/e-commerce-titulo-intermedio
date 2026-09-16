@@ -27,3 +27,6 @@ Thumbs.db
 # Datos locales de Docker (además del volumen nombrado)
 postgres-data/
 *.tsbuildinfo
+
+# Imágenes de producto subidas en desarrollo (CU-16, LocalStorageService)
+backend/uploads/

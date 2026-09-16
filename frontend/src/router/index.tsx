@@ -1,12 +1,17 @@
 import { createBrowserRouter } from 'react-router-dom'
-import { Home } from '../pages/shop/Home'
+import { ProductList } from '../pages/shop/ProductList'
+import { ProductDetail } from '../pages/shop/ProductDetail'
 import { Login } from '../pages/auth/Login'
 import { Register } from '../pages/auth/Register'
 import { VerifyEmail } from '../pages/auth/VerifyEmail'
 import { ForgotPassword } from '../pages/auth/ForgotPassword'
 import { ResetPassword } from '../pages/auth/ResetPassword'
 import { Addresses } from '../pages/account/Addresses'
+import { AdminCategories } from '../pages/admin/Categories'
+import { AdminProducts } from '../pages/admin/Products'
+import { AdminStock } from '../pages/admin/Stock'
 import { ProtectedRoute } from '../components/auth/ProtectedRoute'
+import { AdminRoute } from '../components/auth/AdminRoute'
 
 /**
  * Router raíz de la SPA. Cada fase del plan de ejecución agrega sus rutas
@@ -14,10 +19,8 @@ import { ProtectedRoute } from '../components/auth/ProtectedRoute'
  * catálogo en Fase 2, etc.) — ver plan-de-ejecucion.md.
  */
 export const router = createBrowserRouter([
-  {
-    path: '/',
-    element: <Home />,
-  },
+  { path: '/', element: <ProductList /> },
+  { path: '/products/:id', element: <ProductDetail /> },
   { path: '/login', element: <Login /> },
   { path: '/register', element: <Register /> },
   { path: '/verify-email', element: <VerifyEmail /> },
@@ -26,5 +29,13 @@ export const router = createBrowserRouter([
   {
     element: <ProtectedRoute />,
     children: [{ path: '/account/addresses', element: <Addresses /> }],
+  },
+  {
+    element: <AdminRoute />,
+    children: [
+      { path: '/admin/categories', element: <AdminCategories /> },
+      { path: '/admin/products', element: <AdminProducts /> },
+      { path: '/admin/stock', element: <AdminStock /> },
+    ],
   },
 ])
