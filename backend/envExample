@@ -13,3 +13,28 @@ DATABASE_NAME=ecommerce
 
 # Origen permitido por CORS para las requests del frontend (Vite).
 CORS_ORIGIN=http://localhost:5173
+
+# Secrets de JWT. En desarrollo, cualquier string largo sirve
+# (generar uno real con: openssl rand -hex 32). Nunca reusar el mismo
+# valor para access y refresh.
+JWT_ACCESS_SECRET=change-me-access-change-me-access-32
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_SECRET=change-me-refresh-change-me-refresh-32
+JWT_REFRESH_EXPIRES_IN=7d
+
+BCRYPT_SALT_ROUNDS=10
+
+# CU-07 / CU-08: vencimiento de los tokens de un solo uso.
+EMAIL_VERIFICATION_TOKEN_TTL_HOURS=24
+PASSWORD_RESET_TOKEN_TTL_HOURS=1
+
+# CU-06: bloqueo por intentos fallidos de login, por cuenta y por IP.
+LOGIN_ACCOUNT_MAX_ATTEMPTS=5
+LOGIN_ACCOUNT_LOCKOUT_WINDOW_MIN=15
+LOGIN_ACCOUNT_LOCKOUT_DURATION_MIN=15
+LOGIN_IP_MAX_ATTEMPTS=20
+LOGIN_IP_LOCKOUT_WINDOW_MIN=15
+LOGIN_IP_LOCKOUT_DURATION_MIN=15
+
+# CU-20: máximo de correos por cuenta y plantilla dentro de la ventana.
+EMAIL_RATE_LIMIT_MAX_PER_HOUR=3
