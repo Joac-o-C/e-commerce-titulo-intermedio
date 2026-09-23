@@ -1,4 +1,7 @@
-export type StockMovementType = 'reposicion' | 'ajuste' | 'merma' | 'devolucion'
+/** Los que el Administrador puede cargar a mano (CU-18). */
+export type ManualStockMovementType = 'reposicion' | 'ajuste' | 'merma' | 'devolucion'
+/** `venta` lo genera el sistema al acreditarse un pago (CU-05); sólo aparece en el historial. */
+export type StockMovementType = ManualStockMovementType | 'venta'
 
 /** CU-18: fila de variante en el panel de stock. */
 export interface StockItem {
@@ -24,7 +27,7 @@ export interface StockListPage {
 }
 
 export interface AdjustStockInput {
-  type: StockMovementType
+  type: ManualStockMovementType
   quantity: number
   reason: string
 }

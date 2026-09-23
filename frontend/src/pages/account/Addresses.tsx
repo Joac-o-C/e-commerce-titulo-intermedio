@@ -1,20 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AddressForm } from '../../features/addresses/components/AddressForm'
 import { addressesService } from '../../services/addresses.service'
-import type { Address, CreateAddressInput } from '../../types/address.types'
-
-const emptyForm: CreateAddressInput = {
-  alias: '',
-  street: '',
-  number: '',
-  floorApt: '',
-  city: '',
-  province: '',
-  postalCode: '',
-  phone: '',
-  notes: '',
-  isDefault: false,
-}
+import type { Address } from '../../types/address.types'
 
 /** CU-12 Gestionar direcciones. */
 export function Addresses() {
@@ -24,7 +12,6 @@ export function Addresses() {
     queryFn: addressesService.list,
   })
 
-  const [form, setForm] = useState<CreateAddressInput>(emptyForm)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [replacementDefaultId, setReplacementDefaultId] = useState('')
 
@@ -32,10 +19,7 @@ export function Addresses() {
 
   const createMutation = useMutation({
     mutationFn: addressesService.create,
-    onSuccess: () => {
-      setForm(emptyForm)
-      invalidate()
-    },
+    onSuccess: invalidate,
   })
 
   const removeMutation = useMutation({
@@ -52,11 +36,6 @@ export function Addresses() {
     mutationFn: addressesService.markDefault,
     onSuccess: invalidate,
   })
-
-  const handleCreate = (event: React.FormEvent) => {
-    event.preventDefault()
-    createMutation.mutate(form)
-  }
 
   // CU-12 (flujo 3b): si la que se borra es la predeterminada y quedan
   // otras, primero hay que elegir cuál pasa a serlo.
@@ -135,46 +114,7 @@ export function Addresses() {
         {addresses.length === 0 && <p className="text-neutral-600">Todavía no cargaste direcciones.</p>}
       </ul>
 
-      <form onSubmit={handleCreate} className="space-y-3 rounded border border-neutral-300 p-4">
-        <h2 className="font-medium text-neutral-800">Agregar dirección</h2>
-        {(
-          [
-            ['alias', 'Alias'],
-            ['street', 'Calle'],
-            ['number', 'Número'],
-            ['floorApt', 'Piso/Depto (opcional)'],
-            ['city', 'Ciudad'],
-            ['province', 'Provincia'],
-            ['postalCode', 'Código postal'],
-            ['phone', 'Teléfono'],
-            ['notes', 'Referencias (opcional)'],
-          ] as const
-        ).map(([field, label]) => (
-          <input
-            key={field}
-            value={form[field] ?? ''}
-            onChange={(e) => setForm({ ...form, [field]: e.target.value })}
-            placeholder={label}
-            required={!['floorApt', 'notes'].includes(field)}
-            className="w-full rounded border border-neutral-300 px-3 py-2"
-          />
-        ))}
-        <label className="flex items-center gap-2 text-sm text-neutral-700">
-          <input
-            type="checkbox"
-            checked={form.isDefault ?? false}
-            onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
-          />
-          Marcar como predeterminada
-        </label>
-        <button
-          type="submit"
-          disabled={createMutation.isPending}
-          className="rounded bg-neutral-800 px-4 py-2 text-white disabled:opacity-50"
-        >
-          Guardar dirección
-        </button>
-      </form>
+      <AddressForm isPending={createMutation.isPending} onSubmit={createMutation.mutateAsync} />
     </main>
   )
 }

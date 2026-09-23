@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
+import { fromCents, toCents } from '../../common/money.js';
 import { Product } from '../products/entities/product.entity.js';
 import { ProductVariant } from '../products/entities/product-variant.entity.js';
 import { ProductsService } from '../products/products.service.js';
@@ -33,6 +34,12 @@ export interface CartItemView {
   priceChanged: boolean;
 }
 
+/** CU-03 (flujos 3a/3b): un cambio que la revalidación aplicó al carrito. */
+export type CheckoutAdjustment =
+  | { itemId: string; productName: string; type: 'removed'; reason: 'unavailable' | 'out_of_stock' }
+  | { itemId: string; productName: string; type: 'quantity_reduced'; from: number; to: number }
+  | { itemId: string; productName: string; type: 'price_updated'; from: string; to: string };
+
 export interface MergeItemResult {
   variantId: string;
   requestedQuantity: number;
@@ -57,22 +64,23 @@ export class CartService {
   ) {}
 
   /**
-   * Crea el carrito del cliente en su primer uso si todavía no existe.
+   * Crea el carrito del cliente en su primer uso si todavía no existe, o
+   * después de que el anterior quedó asociado a un pedido (CU-03).
    * Dos requests concurrentes del mismo usuario recién logueado (ej. la
    * fusión de CU-06 y el `GET /cart` del badge del header) pueden
    * encontrar ambas "no existe" antes de que la primera termine de
-   * insertar: la UNIQUE de `user_id` hace fallar a la segunda, que
-   * simplemente relee el carrito que la otra ya creó.
+   * insertar: el índice único parcial de `user_id` (sólo carritos activos)
+   * hace fallar a la segunda, que simplemente relee el que la otra creó.
    */
   async getOrCreateCart(userId: string): Promise<Cart> {
-    const cart = await this.cartRepo.findOne({ where: { userId } });
+    const cart = await this.cartRepo.findOne({ where: { userId, status: CartStatus.ACTIVO } });
     if (cart) return cart;
 
     try {
       return await this.cartRepo.save(this.cartRepo.create({ userId, status: CartStatus.ACTIVO }));
     } catch (err) {
       if (!this.isUniqueViolation(err)) throw err;
-      const race = await this.cartRepo.findOne({ where: { userId } });
+      const race = await this.cartRepo.findOne({ where: { userId, status: CartStatus.ACTIVO } });
       if (!race) throw err;
       return race;
     }
@@ -236,6 +244,104 @@ export class CartService {
   }
 
   /**
+   * CU-03 (paso 3): revalida cada ítem contra el catálogo en servidor y, a
+   * diferencia de CU-02/CU-11, **sí ajusta** el carrito — la ficha del
+   * checkout lo pide así (flujos 3a/3b: "ajusta el carrito, informa los
+   * cambios y pide reconfirmar"). Devuelve los ajustes para que el
+   * frontend los muestre antes de seguir.
+   *
+   * @usecase CU-03 Realizar checkout
+   */
+  async revalidateForCheckout(userId: string): Promise<{ adjustments: CheckoutAdjustment[]; cart: Awaited<ReturnType<CartService['getCart']>> }> {
+    const cart = await this.getOrCreateCart(userId);
+    const items = await this.itemRepo.find({
+      where: { cartId: cart.id },
+      relations: { product: true, variant: true },
+    });
+
+    const adjustments: CheckoutAdjustment[] = [];
+    for (const item of items) {
+      const base = { itemId: item.id, productName: item.product.name };
+
+      if (!item.product.isActive || !item.product.isPublished) {
+        // CU-03 (flujo 3a): producto dado de baja o despublicado.
+        await this.itemRepo.remove(item);
+        adjustments.push({ ...base, type: 'removed', reason: 'unavailable' });
+        continue;
+      }
+      const available = item.variant.stockAvailable;
+      if (available <= 0) {
+        // CU-03 (flujo 3a): sin stock.
+        await this.itemRepo.remove(item);
+        adjustments.push({ ...base, type: 'removed', reason: 'out_of_stock' });
+        continue;
+      }
+
+      let changed = false;
+      if (item.quantity > available) {
+        // CU-03 (flujo 3a): stock insuficiente, se reduce al máximo disponible.
+        adjustments.push({ ...base, type: 'quantity_reduced', from: item.quantity, to: available });
+        item.quantity = available;
+        changed = true;
+      }
+      if (item.product.price !== item.unitPriceSnapshot) {
+        // CU-03 (flujo 3b): el precio vigente difiere del del carrito.
+        adjustments.push({ ...base, type: 'price_updated', from: item.unitPriceSnapshot, to: item.product.price });
+        item.unitPriceSnapshot = item.product.price;
+        changed = true;
+      }
+      if (changed) await this.itemRepo.save(item);
+    }
+
+    return { adjustments, cart: await this.getCart(userId) };
+  }
+
+  /**
+   * CU-03 (paso 13): toma el carrito activo del cliente con lock de fila
+   * dentro de la transacción del checkout — dos "confirmar" concurrentes
+   * (doble click, dos pestañas) se serializan acá, y el segundo ya no
+   * encuentra un carrito activo con ítems.
+   */
+  async lockActiveCartForCheckout(manager: EntityManager, userId: string): Promise<{ cart: Cart; items: CartItem[] } | null> {
+    const cart = await manager.getRepository(Cart).findOne({
+      where: { userId, status: CartStatus.ACTIVO },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!cart) return null;
+    const items = await manager.getRepository(CartItem).find({
+      where: { cartId: cart.id },
+      relations: { product: true, variant: true },
+      order: { addedAt: 'ASC' },
+    });
+    return { cart, items };
+  }
+
+  /** CU-03 (paso 16): el carrito queda asociado al pedido y ya no es editable. */
+  async markAssociatedToOrder(manager: EntityManager, cartId: string): Promise<void> {
+    await manager.getRepository(Cart).update(cartId, { status: CartStatus.ASOCIADO_A_PEDIDO });
+  }
+
+  /**
+   * CU-03 (flujo 17a): la pasarela no creó la preferencia, así que el
+   * carrito tiene que volver a quedar "intacto y editable". Entre que se
+   * asoció al pedido y esta compensación, algo del frontend (el badge del
+   * header) pudo haber creado un carrito activo nuevo y vacío: se descarta
+   * ese para no chocar contra el índice único. Si el cliente ya le cargó
+   * ítems, se respeta ese carrito nuevo (lo comprado sigue en el snapshot
+   * del pedido cancelado) y se devuelve `false`.
+   */
+  async restoreAfterFailedCheckout(manager: EntityManager, cartId: string, userId: string): Promise<boolean> {
+    const cartRepo = manager.getRepository(Cart);
+    const newer = await cartRepo.findOne({ where: { userId, status: CartStatus.ACTIVO } });
+    if (newer) {
+      if ((await manager.getRepository(CartItem).count({ where: { cartId: newer.id } })) > 0) return false;
+      await cartRepo.delete(newer.id);
+    }
+    await cartRepo.update(cartId, { status: CartStatus.ACTIVO });
+    return true;
+  }
+
+  /**
    * Núcleo de validación reusado por `addItem`, `updateItemQuantity`,
    * `previewMerge`/`confirmMerge` y `resolveGuestItem`: resuelve la
    * variante contra el catálogo en servidor y compara el stock disponible
@@ -282,7 +388,7 @@ export class CartService {
       variantAttributes: item.variant.attributes,
       quantity: item.quantity,
       unitPriceSnapshot: item.unitPriceSnapshot,
-      subtotal: (Number(item.unitPriceSnapshot) * item.quantity).toFixed(2),
+      subtotal: fromCents(toCents(item.unitPriceSnapshot) * item.quantity),
       isUnavailable,
       isOutOfStock,
       // Sólo informativo en la vista: el precio real se actualiza al
@@ -293,13 +399,14 @@ export class CartService {
 
   private toCartTotals(cartId: string, items: CartItemView[]) {
     const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
-    const totalAmount = items.reduce((sum, i) => sum + Number(i.subtotal), 0).toFixed(2);
+    const totalAmount = fromCents(items.reduce((sum, i) => sum + toCents(i.subtotal), 0));
     return { cartId, items, totalItems, totalAmount };
   }
 
   private assertMutable(cart: Cart): void {
     // CU-11 (flujo 9a): el carrito ya asociado a un pedido es inmutable.
-    // Sin uso real hasta el checkout de Fase 4, pero se deja listo ahora.
+    // `getOrCreateCart` sólo devuelve carritos activos, así que esto sólo
+    // salta si el checkout asoció el carrito en medio de esta request.
     if (cart.status === CartStatus.ASOCIADO_A_PEDIDO) {
       throw new ConflictException('Este carrito ya está asociado a un pedido; iniciá un carrito nuevo');
     }

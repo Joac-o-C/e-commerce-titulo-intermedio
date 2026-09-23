@@ -11,6 +11,7 @@ export interface SendEmailParams {
   recipientEmail: string;
   template: EmailTemplate;
   data?: Record<string, unknown>;
+  relatedOrderId?: string | null;
 }
 
 export interface SendEmailResult {
@@ -18,6 +19,17 @@ export interface SendEmailResult {
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * CU-20 (flujo 1a) fija el límite de frecuencia sólo para verificación y
+ * restablecimiento (los que el usuario puede disparar a pedido). Los
+ * transaccionales (resultado de pago, cambios de estado del pedido...) no
+ * se limitan: omitir uno le ocultaría al Cliente un resultado real.
+ */
+const RATE_LIMITED_TEMPLATES: ReadonlySet<EmailTemplate> = new Set([
+  EmailTemplate.VERIFICACION,
+  EmailTemplate.RESET_PASSWORD,
+]);
 
 /**
  * Implementación de CU-20 (Enviar notificación por correo): valida
@@ -44,39 +56,34 @@ export class NotificationsService {
    * @usecase CU-20 Enviar notificación por correo
    */
   async send(params: SendEmailParams): Promise<SendEmailResult> {
-    const { userId, recipientEmail, template, data } = params;
+    const { userId, recipientEmail, template, data, relatedOrderId } = params;
+    const base = { userId, recipientEmail, template, data, relatedOrderId };
 
     // CU-20 (flujo 2a): destinatario sin dirección de correo válida.
     if (!recipientEmail || !EMAIL_REGEX.test(recipientEmail)) {
-      return this.log({ userId, recipientEmail, template, data, status: EmailStatus.FALLIDO });
+      return this.log({ ...base, status: EmailStatus.FALLIDO });
     }
 
     // CU-20 (flujo 2b): la plantilla solicitada no existe.
     if (!Object.values(EmailTemplate).includes(template)) {
-      return this.log({ userId, recipientEmail, template, data, status: EmailStatus.FALLIDO });
+      return this.log({ ...base, status: EmailStatus.FALLIDO });
     }
 
     // CU-20 (flujo 1a): la cuenta ya alcanzó el máximo de esa plantilla en
     // la ventana de una hora — no envía, informa al CU solicitante.
-    if (userId && (await this.hasReachedRateLimit(userId, template))) {
-      return this.log({
-        userId,
-        recipientEmail,
-        template,
-        data,
-        status: EmailStatus.OMITIDO_POR_RATE_LIMIT,
-      });
+    if (userId && RATE_LIMITED_TEMPLATES.has(template) && (await this.hasReachedRateLimit(userId, template))) {
+      return this.log({ ...base, status: EmailStatus.OMITIDO_POR_RATE_LIMIT });
     }
 
     const { subject, body } = this.composeMessage(template, data);
 
     try {
       await this.mailProvider.send(recipientEmail, subject, body);
-      return this.log({ userId, recipientEmail, template, data, status: EmailStatus.ENVIADO });
+      return this.log({ ...base, status: EmailStatus.ENVIADO });
     } catch {
       // CU-20 (flujo 4a): el Servicio de Correo no responde o rechaza el
       // mensaje. Se registra el fallo; el CU solicitante continúa igual.
-      return this.log({ userId, recipientEmail, template, data, status: EmailStatus.FALLIDO });
+      return this.log({ ...base, status: EmailStatus.FALLIDO });
     }
   }
 
@@ -106,6 +113,7 @@ export class NotificationsService {
       [EmailTemplate.VERIFICACION]: 'Confirmá tu cuenta',
       [EmailTemplate.RESET_PASSWORD]: 'Restablecé tu contraseña',
       [EmailTemplate.PASSWORD_CHANGED]: 'Tu contraseña fue cambiada',
+      [EmailTemplate.RESULTADO_PAGO]: 'Novedades sobre el pago de tu pedido',
     };
     return {
       subject: subjects[template] ?? `Notificación: ${template}`,
@@ -118,6 +126,7 @@ export class NotificationsService {
     recipientEmail: string;
     template: EmailTemplate;
     data?: Record<string, unknown>;
+    relatedOrderId?: string | null;
     status: EmailStatus;
   }): Promise<SendEmailResult> {
     await this.emailLogRepo.save(
@@ -126,6 +135,7 @@ export class NotificationsService {
         recipientEmail: params.recipientEmail,
         template: params.template,
         payloadSnapshot: params.data ?? null,
+        relatedOrderId: params.relatedOrderId ?? null,
         status: params.status,
       }),
     );

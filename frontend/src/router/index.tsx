@@ -8,6 +8,9 @@ import { VerifyEmail } from '../pages/auth/VerifyEmail'
 import { ForgotPassword } from '../pages/auth/ForgotPassword'
 import { ResetPassword } from '../pages/auth/ResetPassword'
 import { Addresses } from '../pages/account/Addresses'
+import { Checkout } from '../pages/account/Checkout'
+import { CheckoutResult } from '../pages/checkout/CheckoutResult'
+import { SimulatedPayment } from '../pages/checkout/SimulatedPayment'
 import { AdminCategories } from '../pages/admin/Categories'
 import { AdminProducts } from '../pages/admin/Products'
 import { AdminStock } from '../pages/admin/Stock'
@@ -33,9 +36,18 @@ export const router = createBrowserRouter([
       { path: '/verify-email', element: <VerifyEmail /> },
       { path: '/forgot-password', element: <ForgotPassword /> },
       { path: '/reset-password', element: <ResetPassword /> },
+      // Pantalla de la pasarela simulada (sólo con PAYMENT_GATEWAY=fake):
+      // pública, como la de MercadoPago.
+      { path: '/checkout/simulated-payment', element: <SimulatedPayment /> },
       {
         element: <ProtectedRoute />,
-        children: [{ path: '/account/addresses', element: <Addresses /> }],
+        children: [
+          { path: '/account/addresses', element: <Addresses /> },
+          // CU-03: sin checkout de invitado, la sesión es precondición.
+          { path: '/checkout', element: <Checkout /> },
+          // CU-05 (paso 11): retorno de la pasarela.
+          { path: '/checkout/result', element: <CheckoutResult /> },
+        ],
       },
       {
         element: <AdminRoute />,

@@ -53,4 +53,41 @@ export const envValidationSchema = Joi.object({
   // CU-20 (flujo 1a) / CU-07 (R3a) / CU-08 (S2a): límite de envíos por
   // cuenta y plantilla dentro de la ventana.
   EMAIL_RATE_LIMIT_MAX_PER_HOUR: Joi.number().default(3),
+
+  // `then` en los `.when()` es la API de Joi, no un objeto "thenable".
+  /* oxlint-disable unicorn/no-thenable */
+  // CU-03/CU-05: pasarela de pago. `fake` simula MercadoPago en memoria
+  // (página de pago simulada + webhook firmado) para desarrollar sin
+  // credenciales ni túnel; nunca se permite en producción.
+  // Ojo: un `.when()` encadenado sobre `.valid('fake', ...)` hace la unión
+  // de ambos conjuntos (no restringe) y el default 'fake' seguiría
+  // aplicando; por eso cada rama define su esquema completo.
+  PAYMENT_GATEWAY: Joi.when('NODE_ENV', {
+    is: 'production',
+    then: Joi.string().valid('mercadopago').required(),
+    otherwise: Joi.string().valid('fake', 'mercadopago').default('fake'),
+  }),
+  // Access token de MercadoPago (en sandbox, el `TEST-...` de la app).
+  MP_ACCESS_TOKEN: Joi.string().when('PAYMENT_GATEWAY', {
+    is: 'mercadopago',
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+  // CU-05 (paso 3): clave secreta con la que MercadoPago firma los
+  // webhooks (header x-signature). El provider fake firma con la misma.
+  PAYMENT_WEBHOOK_SECRET: Joi.string().when('PAYMENT_GATEWAY', {
+    is: 'mercadopago',
+    then: Joi.required(),
+    otherwise: Joi.string().default('fake-webhook-secret-solo-para-desarrollo'),
+  }),
+  // URL pública (https, p. ej. un túnel) a la que MercadoPago envía los
+  // webhooks. Sin ella, el sandbox real sólo se reconcilia por el cron.
+  MP_NOTIFICATION_URL: Joi.string().uri().optional(),
+  /* oxlint-enable unicorn/no-thenable */
+  // Base de las páginas de retorno de la pasarela (éxito/pendiente/error).
+  FRONTEND_URL: Joi.string().uri().default('http://localhost:5173'),
+  PAYMENT_CURRENCY: Joi.string().default('ARS'),
+
+  // CU-03 (flujo 18a): la reserva de stock de un pedido impago vence a las 24 h.
+  ORDER_RESERVATION_TTL_HOURS: Joi.number().default(24),
 });

@@ -17,6 +17,7 @@ import { UsersService } from './users.service.js';
   ],
   controllers: [AddressesController],
   providers: [UsersService, AddressesService],
-  exports: [UsersService],
+  // AddressesService: `orders` lo usa para validar la dirección del checkout (CU-03).
+  exports: [UsersService, AddressesService],
 })
 export class UsersModule {}

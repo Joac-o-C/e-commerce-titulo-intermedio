@@ -15,6 +15,7 @@ import { AdminProductsController } from './admin-products.controller.js';
 import { ProductsController } from './products.controller.js';
 import { ProductsService } from './products.service.js';
 import { AdminStockController } from './stock/admin-stock.controller.js';
+import { StockReservationService } from './stock/stock-reservation.service.js';
 import { StockService } from './stock/stock.service.js';
 
 @Module({
@@ -32,8 +33,10 @@ import { StockService } from './stock/stock.service.js';
     AdminProductsController,
     AdminStockController,
   ],
-  providers: [CategoriesService, ProductsService, StockService],
-  // ProductsService se exporta para que `cart`/`orders` lo consuman en Fase 3+.
-  exports: [ProductsService],
+  providers: [CategoriesService, ProductsService, StockService, StockReservationService],
+  // ProductsService se exporta para que `cart`/`orders` lo consuman en Fase 3+;
+  // StockReservationService, para que `orders`/`payments` reserven, liberen y
+  // descuenten stock sin tocar el repositorio de variantes directamente.
+  exports: [ProductsService, StockReservationService],
 })
 export class ProductsModule {}

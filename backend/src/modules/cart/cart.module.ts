@@ -17,5 +17,7 @@ import { Cart } from './entities/cart.entity.js';
   ],
   controllers: [CartController],
   providers: [CartService],
+  // `orders` lo consume para revalidar, bloquear y asociar el carrito en el checkout (CU-03).
+  exports: [CartService],
 })
 export class CartModule {}

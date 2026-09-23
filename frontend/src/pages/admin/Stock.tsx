@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { adminStockService } from '../../services/admin-stock.service'
 import { Table } from '../../components/ui/Table'
-import type { AdjustStockInput, StockItem, StockMovementType } from '../../types/stock.types'
+import type { AdjustStockInput, ManualStockMovementType, StockItem, StockMovementType } from '../../types/stock.types'
 
 function extractErrorMessage(err: unknown, fallback: string): string {
   const message = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data
@@ -11,11 +11,18 @@ function extractErrorMessage(err: unknown, fallback: string): string {
   return message ?? fallback
 }
 
-const MOVEMENT_LABELS: Record<StockMovementType, string> = {
+const MANUAL_MOVEMENT_LABELS: Record<ManualStockMovementType, string> = {
   reposicion: 'Reposición (suma)',
   ajuste: 'Ajuste (fija un valor)',
   merma: 'Merma (resta)',
   devolucion: 'Devolución (suma)',
+}
+
+// `venta` no se ofrece en el alta de ajustes: la registra el sistema al
+// acreditarse un pago (CU-05), sólo aparece en el historial.
+const MOVEMENT_LABELS: Record<StockMovementType, string> = {
+  ...MANUAL_MOVEMENT_LABELS,
+  venta: 'Venta (pedido pagado)',
 }
 
 /** CU-18 Gestionar stock (admin). */
@@ -168,11 +175,11 @@ export function AdminStock() {
             <select
               value={adjustForm.type}
               onChange={(e) =>
-                setAdjustForm({ ...adjustForm, type: e.target.value as StockMovementType })
+                setAdjustForm({ ...adjustForm, type: e.target.value as ManualStockMovementType })
               }
               className="w-full rounded border border-neutral-300 px-3 py-2"
             >
-              {Object.entries(MOVEMENT_LABELS).map(([value, label]) => (
+              {Object.entries(MANUAL_MOVEMENT_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>

@@ -251,4 +251,62 @@ describe('CartService', () => {
       expect(itemRepo.save).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('CU-03 Realizar checkout (revalidación del carrito)', () => {
+    const cartItem = (overrides: { quantity?: number; unitPriceSnapshot?: string; product?: object; variant?: object } = {}) => ({
+      id: 'item-1',
+      cartId: 'cart-1',
+      quantity: overrides.quantity ?? 2,
+      unitPriceSnapshot: overrides.unitPriceSnapshot ?? '100.00',
+      product: baseProduct(overrides.product),
+      variant: baseVariant(overrides.variant),
+    });
+
+    beforeEach(() => cartRepo.findOne.mockResolvedValue(baseCart()));
+
+    it('sin cambios: no ajusta nada', async () => {
+      itemRepo.find.mockResolvedValueOnce([cartItem()]);
+
+      const { adjustments } = await service.revalidateForCheckout('user-1');
+
+      expect(adjustments).toEqual([]);
+      expect(itemRepo.save).not.toHaveBeenCalled();
+      expect(itemRepo.remove).not.toHaveBeenCalled();
+    });
+
+    it('3a: quita el ítem dado de baja o despublicado', async () => {
+      itemRepo.find.mockResolvedValueOnce([cartItem({ product: { isPublished: false } })]);
+
+      const { adjustments } = await service.revalidateForCheckout('user-1');
+
+      expect(itemRepo.remove).toHaveBeenCalled();
+      expect(adjustments).toEqual([expect.objectContaining({ type: 'removed', reason: 'unavailable' })]);
+    });
+
+    it('3a: quita el ítem sin stock', async () => {
+      itemRepo.find.mockResolvedValueOnce([cartItem({ variant: { stockTotal: 5, stockReserved: 5 } })]);
+
+      const { adjustments } = await service.revalidateForCheckout('user-1');
+
+      expect(adjustments).toEqual([expect.objectContaining({ type: 'removed', reason: 'out_of_stock' })]);
+    });
+
+    it('3a: reduce la cantidad al máximo disponible', async () => {
+      itemRepo.find.mockResolvedValueOnce([cartItem({ quantity: 5, variant: { stockTotal: 3 } })]);
+
+      const { adjustments } = await service.revalidateForCheckout('user-1');
+
+      expect(adjustments).toEqual([expect.objectContaining({ type: 'quantity_reduced', from: 5, to: 3 })]);
+      expect(itemRepo.save).toHaveBeenCalledWith(expect.objectContaining({ quantity: 3 }));
+    });
+
+    it('3b: actualiza el precio al vigente del catálogo', async () => {
+      itemRepo.find.mockResolvedValueOnce([cartItem({ unitPriceSnapshot: '90.00' })]);
+
+      const { adjustments } = await service.revalidateForCheckout('user-1');
+
+      expect(adjustments).toEqual([expect.objectContaining({ type: 'price_updated', from: '90.00', to: '100.00' })]);
+      expect(itemRepo.save).toHaveBeenCalledWith(expect.objectContaining({ unitPriceSnapshot: '100.00' }));
+    });
+  });
 });

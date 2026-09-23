@@ -42,3 +42,21 @@ LOGIN_IP_LOCKOUT_DURATION_MIN=15
 
 # CU-20: máximo de correos por cuenta y plantilla dentro de la ventana.
 EMAIL_RATE_LIMIT_MAX_PER_HOUR=3
+
+# CU-03 / CU-05: pasarela de pago. `fake` (default en desarrollo) simula
+# MercadoPago sin credenciales ni túnel: el checkout redirige a una página
+# de pago simulada del frontend que dispara el webhook firmado.
+# `mercadopago` usa el SDK real (sandbox con credenciales TEST-).
+PAYMENT_GATEWAY=fake
+# Sólo con PAYMENT_GATEWAY=mercadopago:
+# MP_ACCESS_TOKEN=TEST-...
+# PAYMENT_WEBHOOK_SECRET=clave-secreta-de-webhooks-de-la-app-en-mp
+# URL pública https (túnel ngrok/cloudflared) apuntando a
+# /payments/webhook/mercadopago. Sin ella, el pedido se reconcilia por el
+# cron cada 30 min (o al volver de la pasarela, ver CU-05 paso 11).
+# MP_NOTIFICATION_URL=https://xxxx.ngrok-free.app/payments/webhook/mercadopago
+FRONTEND_URL=http://localhost:5173
+PAYMENT_CURRENCY=ARS
+
+# CU-03 (18a): vencimiento de la reserva de stock de un pedido impago.
+ORDER_RESERVATION_TTL_HOURS=24

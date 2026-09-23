@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { z } from 'zod'
 import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/auth.store'
@@ -18,6 +18,10 @@ type FormValues = z.infer<typeof schema>
 /** CU-06 Iniciar sesión. */
 export function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
+  // CU-03 (flujo 2b): ProtectedRoute deja acá la ruta a la que se quería
+  // entrar (p. ej. /checkout); sin eso, se vuelve a la home.
+  const returnTo = (location.state as { from?: string } | null)?.from ?? '/'
   const setSession = useAuthStore((state) => state.setSession)
   const [serverError, setServerError] = useState<string | null>(null)
   // CU-06 (fusión del carrito de invitado): preview + confirmación en un
@@ -51,9 +55,9 @@ export function Login() {
     setSession(accessToken)
     try {
       const hasConflicts = await cartMerge.run()
-      if (!hasConflicts) navigate('/')
+      if (!hasConflicts) navigate(returnTo)
     } catch {
-      navigate('/')
+      navigate(returnTo)
     }
   }
 
@@ -110,12 +114,12 @@ export function Login() {
             try {
               await cartMerge.confirm(accepted)
             } finally {
-              navigate('/')
+              navigate(returnTo)
             }
           }}
           onCancel={() => {
             cartMerge.cancel()
-            navigate('/')
+            navigate(returnTo)
           }}
         />
       )}

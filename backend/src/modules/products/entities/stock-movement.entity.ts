@@ -15,14 +15,17 @@ export enum StockMovementType {
   AJUSTE = 'ajuste',
   MERMA = 'merma',
   DEVOLUCION = 'devolucion',
+  // CU-05 (7.a): descuento firme de un pedido pagado. Automático (sin actor).
+  VENTA = 'venta',
 }
 
 /**
  * Movimiento de inventario sobre una variante (CU-18): historial de sólo
  * lectura que justifica que la gestión de stock sea un caso de uso propio.
- * `actorId` es nullable para admitir movimientos automáticos futuros (p. ej.
- * liberación de reserva por vencimiento, CU-14/19/22), aunque en esta fase
- * siempre lo genera un Administrador.
+ * `actorId` es nullable para los movimientos automáticos: `venta` (CU-05,
+ * descuento firme al acreditarse el pago) no tiene actor humano. Reservar o
+ * liberar stock no genera movimiento: no cambia `stockTotal`, sólo
+ * `stockReserved`.
  */
 @Entity('stock_movements')
 export class StockMovement {

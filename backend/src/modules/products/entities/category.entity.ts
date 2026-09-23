@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToMany,
   ManyToOne,
@@ -21,6 +22,11 @@ import { Product } from './product.entity.js';
  * productos ya vendidos.
  */
 @Entity('categories')
+// Índices únicos parciales creados a mano en AddCategoryNameUniqueness
+// (CU-17: nombre único entre hermanos). Se declaran acá para que
+// `migration:generate` no los vea como sobrantes e intente borrarlos.
+@Index('UX_categories_name_top_level', ['name'], { unique: true, where: '"parent_id" IS NULL' })
+@Index('UX_categories_name_per_parent', ['parentId', 'name'], { unique: true, where: '"parent_id" IS NOT NULL' })
 export class Category {
   @PrimaryGeneratedColumn('uuid')
   id: string;

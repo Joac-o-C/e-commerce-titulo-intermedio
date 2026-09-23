@@ -81,6 +81,21 @@ describe('NotificationsService', () => {
       expect(sendMock).not.toHaveBeenCalled();
     });
 
+    it('1a: el límite de frecuencia no aplica a plantillas transaccionales (resultado de pago)', async () => {
+      repo.count.mockResolvedValue(10);
+
+      const result = await service.send({
+        userId: 'u1',
+        recipientEmail: 'user@example.com',
+        template: EmailTemplate.RESULTADO_PAGO,
+        relatedOrderId: 'order-1',
+      });
+
+      expect(result.status).toBe(EmailStatus.ENVIADO);
+      expect(repo.count).not.toHaveBeenCalled();
+      expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ relatedOrderId: 'order-1' }));
+    });
+
     it('4a: registra el fallo si el proveedor de correo rechaza el envío, sin lanzar', async () => {
       sendMock.mockRejectedValue(new Error('smtp down'));
 

@@ -6,7 +6,7 @@ import { DEFAULT_LOW_STOCK_THRESHOLD } from '../products.service.js';
 import { Product } from '../entities/product.entity.js';
 import { ProductVariant } from '../entities/product-variant.entity.js';
 import { StockMovement, StockMovementType } from '../entities/stock-movement.entity.js';
-import { AdjustStockDto } from './dto/adjust-stock.dto.js';
+import { AdjustStockDto, type ManualStockMovementType } from './dto/adjust-stock.dto.js';
 import { QueryStockDto } from './dto/query-stock.dto.js';
 import { SetLowStockThresholdDto } from './dto/set-low-stock-threshold.dto.js';
 
@@ -136,7 +136,7 @@ export class StockService {
     }));
   }
 
-  private computeNewTotal(currentTotal: number, type: StockMovementType, quantity: number): number {
+  private computeNewTotal(currentTotal: number, type: ManualStockMovementType, quantity: number): number {
     switch (type) {
       case StockMovementType.REPOSICION:
       case StockMovementType.DEVOLUCION:

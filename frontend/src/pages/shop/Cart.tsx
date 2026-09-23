@@ -157,6 +157,13 @@ export function Cart() {
           </div>
         </div>
 
+        {/* CU-03 (paso 1). */}
+        <div className="mt-4 text-right">
+          <Link to="/checkout" className="inline-block rounded bg-neutral-800 px-6 py-2 text-white">
+            Finalizar compra
+          </Link>
+        </div>
+
         <ConfirmDialog
           open={confirmClear}
           title="Vaciar el carrito"
@@ -266,6 +273,18 @@ export function Cart() {
           <p className="text-sm text-neutral-500">{guestView.totalItems} ítem(s)</p>
           <p className="text-lg font-semibold text-neutral-800">${guestView.totalAmount}</p>
         </div>
+      </div>
+
+      {/* CU-03: no hay checkout de invitado. Al iniciar sesión se fusiona el
+          carrito (CU-06) y se sigue directo al checkout. */}
+      <div className="mt-4 text-right">
+        <Link
+          to="/login"
+          state={{ from: '/checkout' }}
+          className="inline-block rounded bg-neutral-800 px-6 py-2 text-white"
+        >
+          Iniciá sesión para finalizar la compra
+        </Link>
       </div>
 
       <ConfirmDialog

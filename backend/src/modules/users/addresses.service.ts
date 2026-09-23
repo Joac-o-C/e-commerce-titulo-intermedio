@@ -95,6 +95,11 @@ export class AddressesService {
     return this.addressRepo.save(address);
   }
 
+  /** CU-03 (paso 5-6): dirección elegida en el checkout, sólo si es del cliente y está vigente. */
+  findOwnedActive(userId: string, addressId: string): Promise<Address | null> {
+    return this.addressRepo.findOne({ where: { id: addressId, userId, isActive: true } });
+  }
+
   private async clearDefault(userId: string): Promise<void> {
     await this.addressRepo.update({ userId, isDefault: true }, { isDefault: false });
   }
