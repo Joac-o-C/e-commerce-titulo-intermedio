@@ -5,6 +5,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/auth.store'
+import { useCartMerge } from '../../features/cart/hooks/useCartMerge'
+import { MergeCartModal } from '../../features/cart/components/MergeCartModal'
 
 const schema = z.object({
   email: z.string().email('Email inválido'),
@@ -18,6 +20,9 @@ export function Login() {
   const navigate = useNavigate()
   const setSession = useAuthStore((state) => state.setSession)
   const [serverError, setServerError] = useState<string | null>(null)
+  // CU-06 (fusión del carrito de invitado): preview + confirmación en un
+  // solo modal si hay conflictos; si no hay ninguno, se fusiona directo.
+  const cartMerge = useCartMerge()
 
   const {
     register,
@@ -27,10 +32,9 @@ export function Login() {
 
   const onSubmit = async (values: FormValues) => {
     setServerError(null)
+    let accessToken: string
     try {
-      const { accessToken } = await authService.login(values.email, values.password)
-      setSession(accessToken)
-      navigate('/')
+      ;({ accessToken } = await authService.login(values.email, values.password))
     } catch (err: unknown) {
       // CU-06 (flujos 5a/6a/7a/7b): el backend siempre responde con un
       // mensaje que no distingue el motivo exacto salvo el bloqueo temporal.
@@ -38,6 +42,18 @@ export function Login() {
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
         'No pudimos iniciar sesión';
       setServerError(message)
+      return
+    }
+
+    // La sesión ya quedó establecida acá: un problema de red al fusionar el
+    // carrito de invitado (best-effort) nunca debe leerse como "no pudimos
+    // iniciar sesión" — el login ya fue exitoso.
+    setSession(accessToken)
+    try {
+      const hasConflicts = await cartMerge.run()
+      if (!hasConflicts) navigate('/')
+    } catch {
+      navigate('/')
     }
   }
 
@@ -84,6 +100,25 @@ export function Login() {
           <Link to="/forgot-password" className="underline">Olvidé mi contraseña</Link>
         </div>
       </form>
+
+      {cartMerge.conflicts && (
+        <MergeCartModal
+          conflicts={cartMerge.conflicts}
+          onConfirm={async (accepted) => {
+            // Ya iniciamos sesión: si falla la fusión, no dejamos al
+            // usuario trabado en el modal — sigue a la home igual.
+            try {
+              await cartMerge.confirm(accepted)
+            } finally {
+              navigate('/')
+            }
+          }}
+          onCancel={() => {
+            cartMerge.cancel()
+            navigate('/')
+          }}
+        />
+      )}
     </main>
   )
 }

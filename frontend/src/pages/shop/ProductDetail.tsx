@@ -1,18 +1,27 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useProductDetail } from '../../features/catalog/hooks/useProductDetail'
+import { useCartMutations } from '../../features/cart/hooks/useCartMutations'
+import { useGuestCart } from '../../features/cart/hooks/useGuestCart'
+import { useAuthStore } from '../../store/auth.store'
+import type { InsufficientStockError } from '../../types/cart.types'
 
 /** CU-09 Ver detalle de producto. */
 export function ProductDetail() {
   const { id } = useParams<{ id: string }>()
   const { data: product, isLoading, isError } = useProductDetail(id)
+  const isAuthenticated = useAuthStore((s) => s.status === 'authenticated')
+  const { addItem } = useCartMutations()
+  const guestCart = useGuestCart()
 
   const [selectedImage, setSelectedImage] = useState(0)
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null)
   const [quantity, setQuantity] = useState(1)
-  // CU-09 (flujo 8a): al superar el disponible, se informa el máximo y el
-  // usuario decide dejar esa cantidad o cancelar — nunca se ajusta solo.
+  // CU-09 (flujo 8a) / CU-02 (flujo 3a): al superar el disponible, se
+  // informa el máximo y el usuario decide dejar esa cantidad o cancelar —
+  // nunca se ajusta solo.
   const [excessPrompt, setExcessPrompt] = useState<{ requested: number; max: number } | null>(null)
+  const [addedMessage, setAddedMessage] = useState<string | null>(null)
 
   if (isLoading) return <main className="px-4 py-8 text-center">Cargando…</main>
   if (isError || !product) {
@@ -39,6 +48,37 @@ export function ProductDetail() {
     }
     setExcessPrompt(null)
     setQuantity(value)
+  }
+
+  /** @usecase CU-02 Agregar producto al carrito */
+  const handleAddToCart = async () => {
+    setAddedMessage(null)
+    if (isAuthenticated) {
+      try {
+        await addItem.mutateAsync({ variantId: selectedVariant.id, quantity })
+        setAddedMessage('Se agregó al carrito.')
+      } catch (err) {
+        const data = (err as { response?: { data?: InsufficientStockError } })?.response?.data
+        // CU-02 (flujo 3a): informar el máximo, nunca ajustar solo.
+        if (data?.code === 'INSUFFICIENT_STOCK') {
+          setExcessPrompt({ requested: quantity, max: data.maxAvailable })
+        }
+      }
+      return
+    }
+
+    const result = await guestCart.addItem(
+      selectedVariant.id,
+      product.id,
+      product.name,
+      selectedVariant.attributes,
+      quantity,
+    )
+    if (result.outcome === 'insufficient_stock') {
+      setExcessPrompt({ requested: quantity, max: result.maxAvailable ?? 0 })
+    } else if (result.outcome === 'ok') {
+      setAddedMessage('Se agregó al carrito.')
+    }
   }
 
   const availabilityLabel = selectedVariant.isOutOfStock
@@ -167,11 +207,12 @@ export function ProductDetail() {
           <button
             type="button"
             disabled={selectedVariant.isOutOfStock || !!excessPrompt}
+            onClick={handleAddToCart}
             className="mt-6 w-full rounded bg-neutral-800 py-2 text-white disabled:opacity-50"
-            title="Disponible en una fase futura del TP"
           >
             Agregar al carrito
           </button>
+          {addedMessage && <p className="mt-2 text-sm text-green-700">{addedMessage}</p>}
         </div>
       </div>
 
