@@ -42,3 +42,23 @@ root/
     │   ├── styles/                     # Config/entry de Ta
     │   └── types/                      # Interfaces TypeScr
     └── envExample
+
+# comandos para levantar todo
+
+docker compose up -d (si no funciona probar agregar --build) en main, back y front
+
+back: 
+--npm install (la primera vez)
+--cp envExample .env (si no tenés el .env)
+--npm run migration:run (corre migraciones pendientes)
+--npm run start:dev (arranca todo)
+
+front: 
+--npm install (la primera vez)
+--cp envExample (si no tenés el .env)
+--npm run dev (te da el puerto, vas a http://localhost:[puerto])
+
+Direcciones:
+- Frontend: http://localhost:5173
+- API: http://localhost:3000
+- Adminer: http://localhost:8080. Entrás con servidor postgres, usuario, contraseña y base ecommerce.
