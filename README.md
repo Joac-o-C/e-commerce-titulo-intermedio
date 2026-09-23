@@ -62,3 +62,7 @@ Direcciones:
 - Frontend: http://localhost:5173
 - API: http://localhost:3000
 - Adminer: http://localhost:8080. Entrás con servidor postgres, usuario, contraseña y base ecommerce.
+
+tests:
+unitarios: npm test 
+end to end: npm run test:e2e (necesitan la base levantada)
