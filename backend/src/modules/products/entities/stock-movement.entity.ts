@@ -17,6 +17,9 @@ export enum StockMovementType {
   DEVOLUCION = 'devolucion',
   // CU-05 (7.a): descuento firme de un pedido pagado. Automático (sin actor).
   VENTA = 'venta',
+  // CU-14/CU-19: reingreso del stock de un pedido pagado que se cancela
+  // antes del despacho. Actor = quien canceló.
+  CANCELACION = 'cancelacion',
 }
 
 /**

@@ -6,6 +6,7 @@ import { OrdersModule } from '../orders/orders.module.js';
 import { UsersModule } from '../users/users.module.js';
 import { PaymentAuditLog } from './entities/payment-audit-log.entity.js';
 import { Payment } from './entities/payment.entity.js';
+import { Refund } from './entities/refund.entity.js';
 import { FakePaymentController } from './fake-payment.controller.js';
 import { PaymentGatewayModule } from './gateway/payment-gateway.module.js';
 import { PaymentsWebhookController } from './payments-webhook.controller.js';
@@ -14,7 +15,7 @@ import { PaymentsService } from './payments.service.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Payment, PaymentAuditLog]),
+    TypeOrmModule.forFeature([Payment, PaymentAuditLog, Refund]),
     PaymentGatewayModule,
     OrdersModule,
     UsersModule,

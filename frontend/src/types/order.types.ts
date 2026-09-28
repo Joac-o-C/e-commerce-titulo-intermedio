@@ -58,20 +58,107 @@ export interface OrderItem {
   quantity: number
   unitPrice: string
   subtotal: string
+  /** CU-15 (precondición 4): el ítem ya tiene una solicitud de cambio o devolución. */
+  hasReturnRequest: boolean
 }
 
-/** Detalle mínimo del pedido (CU-05 paso 11); el completo llega con CU-13. */
-export interface OrderSummary {
+/** CU-13 (paso 3): estado de pago que ve el Cliente. */
+export type CustomerPaymentStatus = 'pendiente' | 'aprobado' | 'rechazado' | 'sin_pago'
+
+/** CU-13 (paso 7): acción del detalle habilitada, o el motivo por el que no. */
+export type ActionAvailability =
+  | { allowed: true; deadline?: string }
+  | { allowed: false; code: string; message: string }
+
+export type RefundStatus = 'en_tramite' | 'reembolsado' | 'rechazado' | 'pendiente_de_gestion'
+export type ReturnRequestType = 'cambio' | 'devolucion'
+export type ReturnRequestStatus = 'solicitada' | 'aprobada' | 'rechazada' | 'resuelta'
+
+export interface ReturnRequestSummary {
   id: string
+  requestNumber: number
+  type: ReturnRequestType
+  status: ReturnRequestStatus
+  reason: string
+  createdAt: string
+  resolvedAt: string | null
+  resolutionNote: string | null
+  photos: string[]
+  items: { orderItemId: string; productName: string; quantityRequested: number; quantityApproved: number | null }[]
+}
+
+/** CU-13 (pasos 5-7): detalle del pedido. También lo devuelve la página de retorno de la pasarela (CU-05 paso 11). */
+export interface OrderDetail {
+  id: string
+  orderNumber: number
   status: OrderStatus
+  createdAt: string
   subtotal: string
   shippingCost: string
   total: string
   shippingMethod: { id: string; name: string; cost: string }
-  shippingAddress: { alias: string; street: string; number: string; city: string; province: string }
-  reservationExpiresAt: string
-  createdAt: string
+  shippingAddress: {
+    alias: string
+    street: string
+    number: string
+    floorApt: string | null
+    city: string
+    province: string
+    postalCode: string
+    phone: string
+  }
+  reservationExpiresAt: string | null
+  paidAt: string | null
+  deliveredAt: string | null
+  tracking: { carrier: string | null; number: string | null; dispatchedAt: string | null } | null
   items: OrderItem[]
+  payment: { status: CustomerPaymentStatus; mayBeOutdated: boolean; method: string | null; installments: number | null }
+  refunds: { id: string; amount: string; status: RefundStatus; createdAt: string; resolvedAt: string | null }[]
+  statusHistory: { from: OrderStatus | null; to: OrderStatus; at: string }[]
+  returnRequests: ReturnRequestSummary[]
+  actions: {
+    retryPayment: ActionAvailability
+    cancel: ActionAvailability
+    requestReturn: ActionAvailability
+  }
+}
+
+/** CU-13 (paso 3): fila del listado. */
+export interface OrderListItem {
+  id: string
+  orderNumber: number
+  createdAt: string
+  itemCount: number
+  total: string
+  status: OrderStatus
+  paymentStatus: CustomerPaymentStatus
+}
+
+export interface OrderListPage {
+  items: OrderListItem[]
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
+/** CU-13 (flujo 3a). */
+export interface OrderListFilters {
+  page?: number
+  status?: OrderStatus
+  /** Instantes ISO (comienzo y fin del día elegido, en la zona del Cliente). */
+  from?: string
+  to?: string
+  number?: number
+}
+
+export interface CreatedReturnRequest {
+  id: string
+  requestNumber: number
+  status: ReturnRequestStatus
+  type: ReturnRequestType
+  /** CU-15 (paso 7): cómo y a dónde enviar el producto. */
+  instructions: string
 }
 
 /** Preferencia de la pasarela simulada (PAYMENT_GATEWAY=fake). */

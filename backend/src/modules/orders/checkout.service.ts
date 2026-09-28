@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   HttpException,
   HttpStatus,
   Inject,
@@ -14,7 +15,9 @@ import { DataSource, Repository } from 'typeorm';
 import { fromCents, toCents } from '../../common/money.js';
 import { CartService } from '../cart/cart.service.js';
 import { PAYMENT_GATEWAY } from '../payments/gateway/payment-gateway.interface.js';
-import type { PaymentGateway } from '../payments/gateway/payment-gateway.interface.js';
+import type { CreatedPreference, PaymentGateway } from '../payments/gateway/payment-gateway.interface.js';
+import { ProductsService } from '../products/products.service.js';
+import { isPurchasable } from '../products/purchasable.js';
 import { StockReservationService } from '../products/stock/stock-reservation.service.js';
 import { AddressesService } from '../users/addresses.service.js';
 import type { Address } from '../users/entities/address.entity.js';
@@ -23,6 +26,7 @@ import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto.js';
 import { OrderItem } from './entities/order-item.entity.js';
 import { Order, type ShippingAddressSnapshot } from './entities/order.entity.js';
 import { ShippingMethod } from './entities/shipping-method.entity.js';
+import { paymentRetry } from './order-policies.js';
 import { OrderCancellationCause, OrderStatus } from './order-status.js';
 import { OrdersService } from './orders.service.js';
 
@@ -63,6 +67,24 @@ export class PaymentGatewayFailedException extends HttpException {
   }
 }
 
+/**
+ * CU-13 (flujo 7b): el pedido no se puede reintentar porque sus productos
+ * cambiaron (baja, precio o stock). El pedido es un snapshot inmutable:
+ * no se ajusta como un carrito, se informa y el Cliente decide cancelarlo.
+ */
+export class PaymentRetryStaleException extends HttpException {
+  constructor(public readonly problems: CheckoutProblem[]) {
+    super(
+      {
+        code: 'ORDER_STALE',
+        message: 'Algunos productos del pedido cambiaron desde que lo confirmaste: cancelalo y armá uno nuevo desde el catálogo',
+        problems,
+      },
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
 const REQUIRED_ADDRESS_FIELDS = ['street', 'number', 'city', 'province', 'postalCode', 'phone'] as const;
 
 /**
@@ -80,8 +102,6 @@ export class CheckoutService {
     private readonly dataSource: DataSource,
     @InjectRepository(ShippingMethod)
     private readonly shippingMethodRepo: Repository<ShippingMethod>,
-    @InjectRepository(Order)
-    private readonly orderRepo: Repository<Order>,
     @Inject(PAYMENT_GATEWAY)
     private readonly gateway: PaymentGateway,
     private readonly cartService: CartService,
@@ -89,6 +109,7 @@ export class CheckoutService {
     private readonly usersService: UsersService,
     private readonly stockReservation: StockReservationService,
     private readonly ordersService: OrdersService,
+    private readonly productsService: ProductsService,
     config: ConfigService,
   ) {
     this.reservationTtlHours = config.get<number>('ORDER_RESERVATION_TTL_HOURS')!;
@@ -170,7 +191,7 @@ export class CheckoutService {
       // CU-03 (paso 13): revalidación final contra el catálogo.
       const problems: CheckoutProblem[] = [];
       for (const item of items) {
-        if (!item.product.isActive || !item.product.isPublished) {
+        if (!isPurchasable(item.product)) {
           problems.push({ type: 'unavailable', productName: item.product.name });
         } else if (item.product.price !== item.unitPriceSnapshot) {
           problems.push({
@@ -215,6 +236,8 @@ export class CheckoutService {
           trackingCarrier: null,
           trackingNumber: null,
           dispatchedAt: null,
+          paidAt: null,
+          deliveredAt: null,
         }),
       );
       created.items = await manager.save(
@@ -254,32 +277,167 @@ export class CheckoutService {
 
     // CU-03 (paso 17): preferencia de pago. Fuera de la transacción: no se
     // retiene un lock de fila mientras se espera una llamada HTTP externa.
+    let preference: CreatedPreference;
     try {
-      const preference = await this.gateway.createPreference({
-        orderId: order.id,
-        payerEmail: user.email,
-        expiresAt: order.reservationExpiresAt,
-        items: [
-          ...order.items.map((item) => ({
-            id: item.variantId,
-            title: this.itemTitle(item),
-            quantity: item.quantity,
-            unitPrice: Number(item.unitPriceSnapshot),
-          })),
-          ...(toCents(order.shippingCost) > 0
-            ? [{ id: `envio-${method.id}`, title: `Envío: ${method.name}`, quantity: 1, unitPrice: Number(order.shippingCost) }]
-            : []),
-        ],
-      });
-      await this.orderRepo.update(order.id, { paymentPreferenceId: preference.preferenceId });
-      // CU-03 (paso 18): redirección a la pasarela.
-      return { orderId: order.id, redirectUrl: preference.redirectUrl };
+      preference = await this.requestPreference(order, user.email);
     } catch (err) {
       // CU-03 (flujo 17a): la pasarela no responde o rechaza la preferencia.
       this.logger.error(`No se pudo crear la preferencia de pago del pedido ${order.id}`, err as Error);
       await this.compensateFailedPreference(order.id, order.cartId!, userId);
       throw new PaymentGatewayFailedException();
     }
+    await this.attachPreference(order.id, null, preference);
+    // CU-03 (paso 18): redirección a la pasarela.
+    return { orderId: order.id, redirectUrl: preference.redirectUrl };
+  }
+
+  /**
+   * CU-03 flujo R / CU-13 flujo 7b (reintento de pago): retoma los pasos
+   * 13 a 18 del checkout sobre el pedido existente, sin crear otro —
+   * revalida productos y precios contra el snapshot, vuelve a reservar el
+   * stock si el rechazo lo había liberado, deja el pedido en "pendiente de
+   * pago" y genera una preferencia nueva. La reserva conserva su
+   * vencimiento original (24 h desde el alta): reintentar no la extiende.
+   *
+   * @usecase CU-13 Ver mis pedidos (flujo 7b)
+   * @usecase CU-03 Realizar checkout (flujo R)
+   */
+  async retryPayment(userId: string, orderId: string): Promise<{ orderId: string; redirectUrl: string }> {
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new NotFoundException('El usuario no existe');
+
+    const { order, previousPreferenceId } = await this.dataSource.transaction(async (manager) => {
+      const order = await this.ordersService.lockWithItems(manager, orderId);
+      if (!order || order.userId !== userId) throw new NotFoundException('El pedido no existe');
+
+      const retry = paymentRetry(order, new Date());
+      if (!retry.allowed) throw new ConflictException({ code: retry.code, message: retry.message });
+
+      // CU-03 (paso 13, flujo R): revalidación contra el catálogo vigente.
+      const catalog = await this.productsService.findCatalogState(order.items.map((item) => item.productId));
+      const problems: CheckoutProblem[] = [];
+      for (const item of order.items) {
+        const product = catalog.get(item.productId);
+        if (!isPurchasable(product)) {
+          problems.push({ type: 'unavailable', productName: item.productNameSnapshot });
+        } else if (toCents(product.price) !== toCents(item.unitPriceSnapshot)) {
+          problems.push({
+            type: 'price_changed',
+            productName: item.productNameSnapshot,
+            from: item.unitPriceSnapshot,
+            to: product.price,
+          });
+        }
+      }
+      if (problems.length > 0) throw new PaymentRetryStaleException(problems);
+
+      // CU-03 (paso 15): el rechazo (CU-05 7.b) había liberado la reserva.
+      if (!order.stockReservationActive) {
+        const reservation = await this.stockReservation.reserve(
+          manager,
+          order.items.map((item) => ({ variantId: item.variantId, quantity: item.quantity })),
+        );
+        if (!reservation.ok) {
+          const item = order.items.find((i) => i.variantId === reservation.variantId);
+          throw new PaymentRetryStaleException([
+            { type: 'insufficient_stock', productName: item?.productNameSnapshot ?? '' },
+          ]);
+        }
+        order.stockReservationActive = true;
+        await manager.update(Order, order.id, { stockReservationActive: true });
+      }
+
+      if (order.status === OrderStatus.PAGO_RECHAZADO) {
+        await this.ordersService.changeStatus(manager, order, OrderStatus.PENDIENTE_PAGO, {
+          actorId: userId,
+          reason: 'Reintento de pago',
+        });
+      }
+      return { order, previousPreferenceId: order.paymentPreferenceId };
+    });
+
+    // La preferencia anterior deja de aceptar pagos: si no, el Cliente
+    // podría pagar dos veces el mismo pedido. Best-effort — un doble pago
+    // igual se detecta en CU-05 como discrepancia.
+    if (previousPreferenceId) {
+      await this.gateway.expirePreference(previousPreferenceId).catch((err: unknown) => {
+        this.logger.warn(`No se pudo vencer la preferencia ${previousPreferenceId}: ${(err as Error).message}`);
+      });
+    }
+
+    let preference: CreatedPreference;
+    try {
+      preference = await this.requestPreference(order, user.email);
+    } catch (err) {
+      // CU-03 (flujo 17a) dentro del reintento: a diferencia del checkout,
+      // el pedido ya existía y no se cancela — sigue "pendiente de pago",
+      // con su reserva, y el Cliente puede volver a intentar.
+      this.logger.error(`No se pudo crear la preferencia de reintento del pedido ${order.id}`, err as Error);
+      throw new HttpException(
+        {
+          code: 'PAYMENT_GATEWAY_UNAVAILABLE',
+          message: 'No pudimos iniciar el pago con MercadoPago. Tu pedido sigue pendiente: intentá de nuevo en unos minutos.',
+        },
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+    await this.attachPreference(order.id, previousPreferenceId, preference);
+    return { orderId: order.id, redirectUrl: preference.redirectUrl };
+  }
+
+  /** CU-03 (paso 17): pide a la pasarela la preferencia de pago del pedido (sin guardarla). */
+  private async requestPreference(order: Order, payerEmail: string): Promise<CreatedPreference> {
+    const method = order.shippingMethodSnapshot;
+    const preference = await this.gateway.createPreference({
+      orderId: order.id,
+      payerEmail,
+      expiresAt: order.reservationExpiresAt,
+      items: [
+        ...order.items.map((item) => ({
+          id: item.variantId,
+          title: this.itemTitle(item),
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPriceSnapshot),
+        })),
+        ...(toCents(order.shippingCost) > 0
+          ? [{ id: `envio-${method.id}`, title: `Envío: ${method.name}`, quantity: 1, unitPrice: Number(order.shippingCost) }]
+          : []),
+      ],
+    });
+    return preference;
+  }
+
+  /**
+   * Guarda la preferencia recién creada como la vigente del pedido, pero
+   * sólo si el pedido sigue "pendiente de pago" y nadie la reemplazó desde
+   * que se leyó (`expectedPrevious`). La preferencia se crea fuera de la
+   * transacción (no se espera una llamada HTTP con el lock tomado), así que
+   * entre medio pudo pasar un doble click en "reintentar" o una
+   * cancelación (CU-14): en ese caso se vence la preferencia nueva, para
+   * que nunca quede un link de pago abierto que el sistema no conoce.
+   */
+  private async attachPreference(
+    orderId: string,
+    expectedPrevious: string | null,
+    preference: CreatedPreference,
+  ): Promise<void> {
+    const attached = await this.dataSource.transaction(async (manager) => {
+      const current = await manager.findOne(Order, { where: { id: orderId }, lock: { mode: 'pessimistic_write' } });
+      if (!current || current.status !== OrderStatus.PENDIENTE_PAGO || current.paymentPreferenceId !== expectedPrevious) {
+        return false;
+      }
+      await manager.update(Order, orderId, { paymentPreferenceId: preference.preferenceId });
+      return true;
+    });
+    if (attached) return;
+
+    await this.gateway.expirePreference(preference.preferenceId).catch((err: unknown) => {
+      this.logger.error(`Pedido ${orderId}: no se pudo vencer la preferencia huérfana ${preference.preferenceId}`, err as Error);
+    });
+    throw new ConflictException({
+      code: 'ORDER_STATUS_CHANGED',
+      message: 'El pedido cambió mientras se iniciaba el pago (¿lo cancelaste o reintentaste en otra pestaña?): revisalo antes de seguir',
+    });
   }
 
   /**

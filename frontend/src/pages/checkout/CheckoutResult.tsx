@@ -21,7 +21,7 @@ const MESSAGES: Partial<Record<OrderStatus, { title: string; body: string; tone:
   },
   pago_rechazado: {
     title: 'El pago fue rechazado',
-    body: 'MercadoPago no aprobó el pago, así que liberamos el stock que teníamos reservado para este pedido.',
+    body: 'MercadoPago no aprobó el pago, así que liberamos el stock que teníamos reservado para este pedido. Podés reintentar el pago desde el detalle del pedido.',
     tone: 'border-red-300 bg-red-50 text-red-900',
   },
   pendiente_pago: {
@@ -91,7 +91,7 @@ export function CheckoutResult() {
       )}
 
       <section className="rounded-lg border border-neutral-200 bg-white p-5 text-sm">
-        <p className="text-neutral-500">Pedido #{order.data.id.slice(0, 8)}</p>
+        <p className="text-neutral-500">Pedido #{order.data.orderNumber}</p>
         <ul className="mt-3 divide-y divide-neutral-100">
           {order.data.items.map((item) => (
             <li key={item.id} className="flex justify-between py-2">
@@ -117,9 +117,14 @@ export function CheckoutResult() {
         </p>
       </section>
 
-      <Link to="/" className="inline-block text-sm underline">
-        Seguir comprando
-      </Link>
+      <div className="flex gap-4 text-sm">
+        <Link to={`/account/orders/${order.data.id}`} className="underline">
+          Ver el pedido
+        </Link>
+        <Link to="/" className="underline">
+          Seguir comprando
+        </Link>
+      </div>
     </main>
   )
 }

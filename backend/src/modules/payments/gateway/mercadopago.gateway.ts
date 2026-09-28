@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MercadoPagoConfig, MPNotFoundError, Payment, Preference } from 'mercadopago';
+import type { PreferenceUpdateData } from 'mercadopago/dist/clients/preference/update/types.js';
 import type {
   CreatePreferenceInput,
   CreatedPreference,
@@ -69,6 +70,23 @@ export class MercadoPagoGateway implements PaymentGateway {
       throw new PaymentGatewayUnavailableError('MercadoPago devolvió una preferencia incompleta');
     }
     return { preferenceId: response.id, redirectUrl };
+  }
+
+  /** @usecase CU-14 Cancelar pedido (flujo 7b) */
+  async expirePreference(preferenceId: string): Promise<void> {
+    try {
+      await this.preferences.update({
+        id: preferenceId,
+        // La API acepta un PUT parcial; el tipo del SDK exige `items` igual
+        // que en el alta, y reenviarlos sólo agregaría riesgo de pisarlos.
+        updatePreferenceRequest: {
+          expires: true,
+          expiration_date_to: new Date().toISOString(),
+        } as PreferenceUpdateData['updatePreferenceRequest'],
+      });
+    } catch (err) {
+      throw new PaymentGatewayUnavailableError(`MercadoPago no pudo vencer la preferencia ${preferenceId}`, err);
+    }
   }
 
   /** @usecase CU-05 Procesar confirmación de pago (paso 5: reconciliación) */

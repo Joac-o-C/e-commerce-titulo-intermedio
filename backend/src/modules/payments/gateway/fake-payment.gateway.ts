@@ -64,6 +64,11 @@ export class FakePaymentGateway implements PaymentGateway {
     return [...this.payments.values()].filter((p) => p.orderId === orderId);
   }
 
+  async expirePreference(preferenceId: string): Promise<void> {
+    const preference = this.preferences.get(preferenceId);
+    if (preference) preference.expiresAt = new Date();
+  }
+
   getPreference(preferenceId: string): FakePreference {
     const preference = this.preferences.get(preferenceId);
     if (!preference) throw new NotFoundException('La preferencia no existe (¿se reinició el backend?)');
@@ -73,6 +78,11 @@ export class FakePaymentGateway implements PaymentGateway {
   /** Lo que haría el Cliente dentro de la pasarela: pagar con un resultado dado. */
   simulatePayment(preferenceId: string, outcome: SimulatedOutcome): GatewayPayment {
     const preference = this.getPreference(preferenceId);
+    // Como MercadoPago: una preferencia vencida (reserva vencida, pedido
+    // cancelado o reemplazada por un reintento) ya no acepta pagos.
+    if (preference.expiresAt <= new Date()) {
+      throw new ConflictException('La preferencia de pago venció: volvé al pedido para reintentar el pago');
+    }
     // Ids numéricos, como los de MercadoPago.
     const id = String(Date.now()) + String(Math.floor(Math.random() * 1000)).padStart(3, '0');
     const { status, statusDetail } = RAW_STATUS[outcome];

@@ -9,6 +9,9 @@ import { ForgotPassword } from '../pages/auth/ForgotPassword'
 import { ResetPassword } from '../pages/auth/ResetPassword'
 import { Addresses } from '../pages/account/Addresses'
 import { Checkout } from '../pages/account/Checkout'
+import { Orders } from '../pages/account/Orders'
+import { OrderDetail } from '../pages/account/OrderDetail'
+import { ReturnRequest } from '../pages/account/ReturnRequest'
 import { CheckoutResult } from '../pages/checkout/CheckoutResult'
 import { SimulatedPayment } from '../pages/checkout/SimulatedPayment'
 import { AdminCategories } from '../pages/admin/Categories'
@@ -47,6 +50,10 @@ export const router = createBrowserRouter([
           { path: '/checkout', element: <Checkout /> },
           // CU-05 (paso 11): retorno de la pasarela.
           { path: '/checkout/result', element: <CheckoutResult /> },
+          // CU-13 (lista y detalle), CU-14 (desde el detalle) y CU-15.
+          { path: '/account/orders', element: <Orders /> },
+          { path: '/account/orders/:id', element: <OrderDetail /> },
+          { path: '/account/orders/:id/return', element: <ReturnRequest /> },
         ],
       },
       {

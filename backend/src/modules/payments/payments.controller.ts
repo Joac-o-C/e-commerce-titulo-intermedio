@@ -3,6 +3,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import type { JwtAccessPayload } from '../auth/strategies/jwt.strategy.js';
 import { AWAITING_PAYMENT_STATUSES } from '../orders/order-status.js';
+import { CustomerOrdersService } from '../orders/customer-orders.service.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { PaymentsService } from './payments.service.js';
 
@@ -12,6 +13,7 @@ export class PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,
     private readonly ordersService: OrdersService,
+    private readonly customerOrders: CustomerOrdersService,
   ) {}
 
   /**
@@ -33,6 +35,6 @@ export class PaymentsController {
     if (AWAITING_PAYMENT_STATUSES.includes(order.status)) {
       await this.paymentsService.reconcileOrder(orderId, 'retorno_cliente');
     }
-    return this.ordersService.findOwnedOrFail(user.sub, orderId);
+    return this.customerOrders.getDetail(user.sub, orderId);
   }
 }

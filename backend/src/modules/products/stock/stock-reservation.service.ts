@@ -128,6 +128,42 @@ export class StockReservationService {
   }
 
   /**
+   * Reingreso del stock de una venta que se cancela antes del despacho
+   * (CU-14 paso 6 / CU-19): operación inversa al descuento firme de
+   * `confirmSale`, con su movimiento en el historial de CU-18.
+   *
+   * @usecase CU-14 Cancelar pedido (paso 6)
+   */
+  async restockCancelledSale(
+    manager: EntityManager,
+    lines: StockLine[],
+    opts: { reason: string; actorId: string | null },
+  ): Promise<void> {
+    for (const line of this.sorted(lines)) {
+      await manager
+        .createQueryBuilder()
+        .update(ProductVariant)
+        .set({ stockTotal: () => 'stock_total + :qty' })
+        .where('id = :id', { id: line.variantId, qty: line.quantity })
+        .execute();
+      const { stockTotal: resultingStockTotal } = await manager.findOneOrFail(ProductVariant, {
+        select: { id: true, stockTotal: true },
+        where: { id: line.variantId },
+      });
+      await manager.save(
+        manager.create(StockMovement, {
+          variantId: line.variantId,
+          type: StockMovementType.CANCELACION,
+          quantity: line.quantity,
+          resultingStockTotal,
+          reason: opts.reason,
+          actorId: opts.actorId,
+        }),
+      );
+    }
+  }
+
+  /**
    * Orden estable por variante: dos transacciones que reservan sobre las
    * mismas variantes toman los locks de fila en el mismo orden y no pueden
    * quedar en deadlock entre sí.

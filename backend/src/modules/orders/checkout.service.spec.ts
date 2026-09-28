@@ -1,9 +1,10 @@
-import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, HttpException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 import { CartService } from '../cart/cart.service.js';
 import { PAYMENT_GATEWAY, PaymentGatewayUnavailableError } from '../payments/gateway/payment-gateway.interface.js';
+import { ProductsService } from '../products/products.service.js';
 import { StockReservationService } from '../products/stock/stock-reservation.service.js';
 import { AddressesService } from '../users/addresses.service.js';
 import { UsersService } from '../users/users.service.js';
@@ -12,6 +13,7 @@ import {
   CheckoutStaleException,
   EmptyCartException,
   PaymentGatewayFailedException,
+  PaymentRetryStaleException,
 } from './checkout.service.js';
 import { Order } from './entities/order.entity.js';
 import { ShippingMethod } from './entities/shipping-method.entity.js';
@@ -47,19 +49,27 @@ const cartItem = (overrides: { price?: string; snapshot?: string; isPublished?: 
 
 describe('CheckoutService', () => {
   let service: CheckoutService;
-  let manager: { create: ReturnType<typeof vi.fn>; save: ReturnType<typeof vi.fn> };
+  let manager: {
+    create: ReturnType<typeof vi.fn>;
+    save: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    findOne: ReturnType<typeof vi.fn>;
+  };
   let cartService: Record<string, ReturnType<typeof vi.fn>>;
   let addressesService: { findOwnedActive: ReturnType<typeof vi.fn> };
   let shippingRepo: { find: ReturnType<typeof vi.fn>; findOne: ReturnType<typeof vi.fn> };
-  let orderRepo: { update: ReturnType<typeof vi.fn> };
   let stockReservation: { reserve: ReturnType<typeof vi.fn> };
   let ordersService: Record<string, ReturnType<typeof vi.fn>>;
-  let gateway: { createPreference: ReturnType<typeof vi.fn> };
+  let gateway: { createPreference: ReturnType<typeof vi.fn>; expirePreference: ReturnType<typeof vi.fn> };
+  let productsService: { findCatalogState: ReturnType<typeof vi.fn> };
 
   const confirmDto = { addressId: 'addr-1', shippingMethodId: 'ship-1', expectedTotal: '700.00' };
 
   beforeEach(async () => {
     manager = {
+      update: vi.fn(),
+      // Estado del pedido al guardar la preferencia (attachPreference).
+      findOne: vi.fn().mockResolvedValue({ status: OrderStatus.PENDIENTE_PAGO, paymentPreferenceId: null }),
       create: vi.fn((_entity, data) => data),
       save: vi.fn((data) => Promise.resolve(Array.isArray(data) ? data : { id: 'order-1', ...data })),
     };
@@ -72,7 +82,6 @@ describe('CheckoutService', () => {
     };
     addressesService = { findOwnedActive: vi.fn().mockResolvedValue(address()) };
     shippingRepo = { find: vi.fn().mockResolvedValue([shipping]), findOne: vi.fn().mockResolvedValue(shipping) };
-    orderRepo = { update: vi.fn() };
     stockReservation = { reserve: vi.fn().mockResolvedValue({ ok: true }) };
     ordersService = {
       recordHistory: vi.fn(),
@@ -82,6 +91,12 @@ describe('CheckoutService', () => {
     };
     gateway = {
       createPreference: vi.fn().mockResolvedValue({ preferenceId: 'pref-1', redirectUrl: 'https://mp/checkout' }),
+      expirePreference: vi.fn().mockResolvedValue(undefined),
+    };
+    productsService = {
+      findCatalogState: vi
+        .fn()
+        .mockResolvedValue(new Map([['product-1', { isActive: true, isPublished: true, price: '100.00' }]])),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -89,13 +104,13 @@ describe('CheckoutService', () => {
         CheckoutService,
         { provide: getDataSourceToken(), useValue: { transaction: (cb: (m: unknown) => unknown) => cb(manager) } },
         { provide: getRepositoryToken(ShippingMethod), useValue: shippingRepo },
-        { provide: getRepositoryToken(Order), useValue: orderRepo },
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: CartService, useValue: cartService },
         { provide: AddressesService, useValue: addressesService },
         { provide: UsersService, useValue: { findById: vi.fn().mockResolvedValue({ id: 'user-1', email: 'c@example.com' }) } },
         { provide: StockReservationService, useValue: stockReservation },
         { provide: OrdersService, useValue: ordersService },
+        { provide: ProductsService, useValue: productsService },
         { provide: ConfigService, useValue: { get: vi.fn().mockReturnValue(24) } },
       ],
     }).compile();
@@ -131,7 +146,7 @@ describe('CheckoutService', () => {
           ],
         }),
       );
-      expect(orderRepo.update).toHaveBeenCalledWith('order-1', { paymentPreferenceId: 'pref-1' });
+      expect(manager.update).toHaveBeenCalledWith(Order, 'order-1', { paymentPreferenceId: 'pref-1' });
     });
 
     it('2a: rechaza el checkout de un carrito vacío (o ya asociado por un doble click)', async () => {
@@ -214,6 +229,137 @@ describe('CheckoutService', () => {
       const quote = await service.quote('user-1', 'addr-1', 'ship-1');
 
       expect(quote).toEqual(expect.objectContaining({ subtotal: '200.30', shippingCost: '500.00', total: '700.30' }));
+    });
+  });
+
+  describe('CU-13 Ver mis pedidos — reintento de pago (flujo 7b / CU-03 flujo R)', () => {
+    beforeEach(() => {
+      // Al guardar la preferencia nueva, el pedido sigue con la que leyó el reintento.
+      manager.findOne.mockResolvedValue({ status: OrderStatus.PENDIENTE_PAGO, paymentPreferenceId: 'pref-viejo' });
+    });
+
+    const future = new Date(Date.now() + 60 * 60 * 1000);
+    const orderToRetry = (overrides: Record<string, unknown> = {}) => ({
+      id: 'order-1',
+      userId: 'user-1',
+      status: OrderStatus.PAGO_RECHAZADO,
+      stockReservationActive: false,
+      reservationExpiresAt: future,
+      paymentPreferenceId: 'pref-viejo',
+      shippingCost: '500.00',
+      shippingMethodSnapshot: { id: 'ship-1', name: 'Estándar', cost: '500.00' },
+      items: [
+        {
+          productId: 'product-1',
+          variantId: 'variant-1',
+          quantity: 2,
+          unitPriceSnapshot: '100.00',
+          productNameSnapshot: 'Remera',
+          variantAttributesSnapshot: { talle: 'M' },
+        },
+      ],
+      ...overrides,
+    });
+
+    it('vuelve a reservar el stock, pasa a "pendiente de pago", vence la preferencia vieja y crea otra', async () => {
+      const order = orderToRetry();
+      ordersService.lockWithItems.mockResolvedValue(order);
+
+      const result = await service.retryPayment('user-1', 'order-1');
+
+      expect(result).toEqual({ orderId: 'order-1', redirectUrl: 'https://mp/checkout' });
+      expect(stockReservation.reserve).toHaveBeenCalledWith(manager, [{ variantId: 'variant-1', quantity: 2 }]);
+      expect(ordersService.changeStatus).toHaveBeenCalledWith(
+        manager,
+        order,
+        OrderStatus.PENDIENTE_PAGO,
+        expect.objectContaining({ actorId: 'user-1' }),
+      );
+      expect(gateway.expirePreference).toHaveBeenCalledWith('pref-viejo');
+      // La preferencia nueva vence con la reserva original: reintentar no la extiende.
+      expect(gateway.createPreference).toHaveBeenCalledWith(expect.objectContaining({ expiresAt: future }));
+      expect(manager.update).toHaveBeenCalledWith(Order, 'order-1', { paymentPreferenceId: 'pref-1' });
+    });
+
+    it('doble click: si otro reintento ya guardó su preferencia, vence la nueva y no la registra', async () => {
+      ordersService.lockWithItems.mockResolvedValue(orderToRetry());
+      manager.findOne.mockResolvedValue({ status: OrderStatus.PENDIENTE_PAGO, paymentPreferenceId: 'pref-del-otro-click' });
+
+      const error = await service.retryPayment('user-1', 'order-1').catch((e) => e);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect(gateway.expirePreference).toHaveBeenCalledWith('pref-1');
+      expect(manager.update).not.toHaveBeenCalledWith(Order, 'order-1', { paymentPreferenceId: 'pref-1' });
+    });
+
+    it('CU-14 durante el reintento: si el pedido se canceló mientras tanto, vence la preferencia nueva', async () => {
+      ordersService.lockWithItems.mockResolvedValue(orderToRetry());
+      manager.findOne.mockResolvedValue({ status: OrderStatus.CANCELADO, paymentPreferenceId: 'pref-viejo' });
+
+      await expect(service.retryPayment('user-1', 'order-1')).rejects.toBeInstanceOf(ConflictException);
+      expect(gateway.expirePreference).toHaveBeenCalledWith('pref-1');
+    });
+
+    it('en "pendiente de pago" con la reserva vigente no vuelve a reservar ni cambia el estado', async () => {
+      ordersService.lockWithItems.mockResolvedValue(
+        orderToRetry({ status: OrderStatus.PENDIENTE_PAGO, stockReservationActive: true }),
+      );
+
+      await service.retryPayment('user-1', 'order-1');
+
+      expect(stockReservation.reserve).not.toHaveBeenCalled();
+      expect(ordersService.changeStatus).not.toHaveBeenCalled();
+    });
+
+    it('rechaza el reintento de un pedido que ya no espera el pago', async () => {
+      ordersService.lockWithItems.mockResolvedValue(orderToRetry({ status: OrderStatus.PAGADO }));
+
+      await expect(service.retryPayment('user-1', 'order-1')).rejects.toBeInstanceOf(ConflictException);
+      expect(gateway.createPreference).not.toHaveBeenCalled();
+    });
+
+    it('rechaza el reintento si la reserva de 24 h ya venció', async () => {
+      ordersService.lockWithItems.mockResolvedValue(orderToRetry({ reservationExpiresAt: new Date(Date.now() - 1000) }));
+
+      const error = await service.retryPayment('user-1', 'order-1').catch((e) => e);
+      expect(error.getResponse()).toEqual(expect.objectContaining({ code: 'ORDER_EXPIRED' }));
+    });
+
+    it('5a: un pedido ajeno responde como inexistente', async () => {
+      ordersService.lockWithItems.mockResolvedValue(orderToRetry({ userId: 'otro' }));
+
+      await expect(service.retryPayment('user-1', 'order-1')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('13a: no reintenta si el precio del producto cambió desde el pedido', async () => {
+      ordersService.lockWithItems.mockResolvedValue(orderToRetry());
+      productsService.findCatalogState.mockResolvedValue(
+        new Map([['product-1', { isActive: true, isPublished: true, price: '120.00' }]]),
+      );
+
+      const error = await service.retryPayment('user-1', 'order-1').catch((e) => e);
+      expect(error).toBeInstanceOf(PaymentRetryStaleException);
+      expect(error.problems).toEqual([expect.objectContaining({ type: 'price_changed', to: '120.00' })]);
+      expect(stockReservation.reserve).not.toHaveBeenCalled();
+    });
+
+    it('13a: no reintenta si ya no hay stock para volver a reservar', async () => {
+      ordersService.lockWithItems.mockResolvedValue(orderToRetry());
+      stockReservation.reserve.mockResolvedValue({ ok: false, variantId: 'variant-1' });
+
+      const error = await service.retryPayment('user-1', 'order-1').catch((e) => e);
+      expect(error.problems).toEqual([{ type: 'insufficient_stock', productName: 'Remera' }]);
+      expect(ordersService.changeStatus).not.toHaveBeenCalled();
+    });
+
+    it('17a: si la pasarela falla, el pedido no se cancela (sigue pendiente de pago)', async () => {
+      ordersService.lockWithItems.mockResolvedValue(orderToRetry());
+      gateway.createPreference.mockRejectedValue(new PaymentGatewayUnavailableError('timeout'));
+
+      const error = await service.retryPayment('user-1', 'order-1').catch((e) => e);
+      expect(error).toBeInstanceOf(HttpException);
+      expect(error.getStatus()).toBe(502);
+      expect(ordersService.changeStatus).not.toHaveBeenCalledWith(manager, expect.anything(), OrderStatus.CANCELADO, expect.anything());
     });
   });
 });

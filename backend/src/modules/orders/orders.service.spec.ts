@@ -13,7 +13,9 @@ const order = (overrides: Partial<Order> = {}): Order =>
     stockReservationActive: true,
     reservationExpiresAt: new Date('2026-01-02T00:00:00Z'),
     internalNotes: null,
-    items: [{ variantId: 'variant-1', quantity: 2, productNameSnapshot: 'Remera' }],
+    paidAt: null,
+    deliveredAt: null,
+    items: [{ id: 'item-1', variantId: 'variant-1', quantity: 2, productNameSnapshot: 'Remera', stockCommitted: false }],
     ...overrides,
   }) as Order;
 
@@ -27,7 +29,12 @@ describe('OrdersService', () => {
     find: ReturnType<typeof vi.fn>;
   };
   let orderRepo: { find: ReturnType<typeof vi.fn> };
-  let stock: { release: ReturnType<typeof vi.fn>; confirmSale: ReturnType<typeof vi.fn>; reserve: ReturnType<typeof vi.fn> };
+  let stock: {
+    release: ReturnType<typeof vi.fn>;
+    confirmSale: ReturnType<typeof vi.fn>;
+    reserve: ReturnType<typeof vi.fn>;
+    restockCancelledSale: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
     manager = {
@@ -38,7 +45,7 @@ describe('OrdersService', () => {
       find: vi.fn().mockResolvedValue([]),
     };
     orderRepo = { find: vi.fn() };
-    stock = { release: vi.fn(), confirmSale: vi.fn().mockResolvedValue([]), reserve: vi.fn() };
+    stock = { release: vi.fn(), confirmSale: vi.fn().mockResolvedValue([]), reserve: vi.fn(), restockCancelledSale: vi.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -72,6 +79,9 @@ describe('OrdersService', () => {
       expect(o.status).toBe(OrderStatus.PAGADO);
       expect(stock.confirmSale).toHaveBeenCalledWith(manager, [{ variantId: 'variant-1', quantity: 2 }], expect.objectContaining({ reservationActive: true }));
       expect(o.stockReservationActive).toBe(false);
+      // Hitos que usan CU-14 (24 h para cancelar) y el reingreso de stock al cancelar.
+      expect(o.paidAt).toBeInstanceOf(Date);
+      expect(o.items[0].stockCommitted).toBe(true);
     });
 
     it('7a-1: aprobado con la reserva vencida y sin stock → "pagado" igual, con el faltante anotado', async () => {
@@ -88,6 +98,8 @@ describe('OrdersService', () => {
       expect(o.status).toBe(OrderStatus.PAGADO);
       expect(result.shortages).toHaveLength(1);
       expect(o.internalNotes).toContain('Remera ×2');
+      // El ítem del faltante no se descontó: al cancelar no hay que reingresarlo.
+      expect(o.items[0].stockCommitted).toBe(false);
     });
 
     it('aprobado sobre un pedido ya pagado: no descuenta stock de nuevo y lo marca como discrepancia (doble cobro)', async () => {
@@ -185,6 +197,37 @@ describe('OrdersService', () => {
 
       expect(expired).toBe(0);
       expect(stock.release).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('CU-14 Cancelar pedido', () => {
+    it('6: un pedido impago libera la reserva y no reingresa nada', async () => {
+      const o = order();
+
+      await service.returnStockOnCancel(manager as never, o, 'user-1');
+
+      expect(stock.release).toHaveBeenCalledWith(manager, [{ variantId: 'variant-1', quantity: 2 }]);
+      expect(stock.restockCancelledSale).not.toHaveBeenCalled();
+    });
+
+    it('6: un pedido pagado reingresa sólo los ítems descontados en firme', async () => {
+      const o = order({
+        stockReservationActive: false,
+        items: [
+          { id: 'item-1', variantId: 'variant-1', quantity: 2, productNameSnapshot: 'Remera', stockCommitted: true },
+          { id: 'item-2', variantId: 'variant-2', quantity: 1, productNameSnapshot: 'Buzo', stockCommitted: false },
+        ] as Order['items'],
+      });
+
+      await service.returnStockOnCancel(manager as never, o, 'user-1');
+
+      expect(stock.release).not.toHaveBeenCalled();
+      expect(stock.restockCancelledSale).toHaveBeenCalledWith(
+        manager,
+        [{ variantId: 'variant-1', quantity: 2 }],
+        expect.objectContaining({ actorId: 'user-1' }),
+      );
+      expect(o.items.every((i) => !i.stockCommitted)).toBe(true);
     });
   });
 });

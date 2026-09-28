@@ -5,6 +5,7 @@ import { fromCents, toCents } from '../../common/money.js';
 import { Product } from '../products/entities/product.entity.js';
 import { ProductVariant } from '../products/entities/product-variant.entity.js';
 import { ProductsService } from '../products/products.service.js';
+import { isPurchasable } from '../products/purchasable.js';
 import { CartItem } from './entities/cart-item.entity.js';
 import { Cart, CartStatus } from './entities/cart.entity.js';
 
@@ -263,7 +264,7 @@ export class CartService {
     for (const item of items) {
       const base = { itemId: item.id, productName: item.product.name };
 
-      if (!item.product.isActive || !item.product.isPublished) {
+      if (!isPurchasable(item.product)) {
         // CU-03 (flujo 3a): producto dado de baja o despublicado.
         await this.itemRepo.remove(item);
         adjustments.push({ ...base, type: 'removed', reason: 'unavailable' });
@@ -377,7 +378,7 @@ export class CartService {
   }
 
   private toItemView(item: CartItem): CartItemView {
-    const isUnavailable = !item.variant.product.isActive || !item.variant.product.isPublished;
+    const isUnavailable = !isPurchasable(item.variant.product);
     const isOutOfStock = !isUnavailable && item.variant.stockAvailable <= 0;
     const currentPrice = item.product.price;
     return {

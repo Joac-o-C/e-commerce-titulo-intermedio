@@ -49,4 +49,13 @@ export class OrderItem {
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   subtotal: string;
+
+  /**
+   * El stock de este ítem se descontó en firme al acreditarse el pago
+   * (CU-05 7.a). Queda en false para los ítems del faltante de 7a-1: al
+   * cancelar un pedido pagado (CU-14/CU-19) sólo se reingresa lo que de
+   * verdad se había descontado.
+   */
+  @Column({ name: 'stock_committed', default: false })
+  stockCommitted: boolean;
 }

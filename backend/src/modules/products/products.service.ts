@@ -18,6 +18,7 @@ import { UpdateProductDto } from './dto/update-product.dto.js';
 import { Product } from './entities/product.entity.js';
 import { ProductImage } from './entities/product-image.entity.js';
 import { ProductVariant } from './entities/product-variant.entity.js';
+import { isPurchasable } from './purchasable.js';
 import { STORAGE_SERVICE, type StorageService } from '../../providers/storage/storage.interface.js';
 
 /** CU-18: umbral de stock bajo por defecto cuando el producto no fija uno propio. */
@@ -329,10 +330,23 @@ export class ProductsService {
    */
   async resolveVariantForPurchase(variantId: string): Promise<{ product: Product; variant: ProductVariant }> {
     const variant = await this.variantRepo.findOne({ where: { id: variantId }, relations: { product: true } });
-    if (!variant || !variant.product.isActive || !variant.product.isPublished) {
+    if (!variant || !isPurchasable(variant.product)) {
       throw new NotFoundException('La variante solicitada no está disponible');
     }
     return { product: variant.product, variant };
+  }
+
+  /**
+   * Estado vigente en el catálogo de los productos de un pedido, para
+   * revalidarlo antes de reintentar el pago (CU-03 flujo R, pasos 13-18).
+   */
+  async findCatalogState(productIds: string[]): Promise<Map<string, Pick<Product, 'isActive' | 'isPublished' | 'price'>>> {
+    if (productIds.length === 0) return new Map();
+    const products = await this.productRepo.find({
+      select: { id: true, isActive: true, isPublished: true, price: true },
+      where: { id: In(productIds) },
+    });
+    return new Map(products.map((p) => [p.id, p]));
   }
 
   /** `categoryIds` ya viene expandido a subcategorías (ver findPublished). */

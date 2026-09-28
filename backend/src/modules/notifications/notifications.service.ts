@@ -114,6 +114,8 @@ export class NotificationsService {
       [EmailTemplate.RESET_PASSWORD]: 'Restablecé tu contraseña',
       [EmailTemplate.PASSWORD_CHANGED]: 'Tu contraseña fue cambiada',
       [EmailTemplate.RESULTADO_PAGO]: 'Novedades sobre el pago de tu pedido',
+      [EmailTemplate.CANCELACION]: 'Tu pedido fue cancelado',
+      [EmailTemplate.COMPROBANTE_POSVENTA]: 'Recibimos tu solicitud de cambio o devolución',
     };
     return {
       subject: subjects[template] ?? `Notificación: ${template}`,

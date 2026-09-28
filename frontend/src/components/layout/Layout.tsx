@@ -26,9 +26,14 @@ export function Layout() {
           </Link>
           <nav className="flex items-center gap-4 text-sm">
             {authStatus === 'authenticated' ? (
-              <Link to="/account/addresses" className="text-neutral-600 hover:text-neutral-900">
-                Mi cuenta
-              </Link>
+              <>
+                <Link to="/account/orders" className="text-neutral-600 hover:text-neutral-900">
+                  Mis pedidos
+                </Link>
+                <Link to="/account/addresses" className="text-neutral-600 hover:text-neutral-900">
+                  Mi cuenta
+                </Link>
+              </>
             ) : (
               <Link to="/login" className="text-neutral-600 hover:text-neutral-900">
                 Iniciar sesión

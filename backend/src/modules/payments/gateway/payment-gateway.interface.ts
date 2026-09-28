@@ -74,4 +74,10 @@ export interface PaymentGateway {
   getPayment(paymentId: string): Promise<GatewayPayment>;
   /** Reconciliación periódica (CU-05, Observaciones): pagos de un pedido. */
   findPaymentsByOrder(orderId: string): Promise<GatewayPayment[]>;
+  /**
+   * Deja de aceptar pagos en una preferencia: al cancelar un pedido impago
+   * (CU-14 7b) y al reemplazarla por otra en el reintento de pago (CU-13
+   * 7b). Puede fallar con `PaymentGatewayUnavailableError`.
+   */
+  expirePreference(preferenceId: string): Promise<void>;
 }

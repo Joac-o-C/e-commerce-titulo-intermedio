@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Generated,
   Index,
   JoinColumn,
   ManyToOne,
@@ -51,6 +52,14 @@ export interface ShippingMethodSnapshot {
 export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  /**
+   * Número correlativo que ve el Cliente (CU-13 pasos 3 y 3a: "número de
+   * pedido", buscable). El uuid sigue siendo la clave técnica.
+   */
+  @Column({ name: 'order_number', type: 'int', unique: true })
+  @Generated('increment')
+  orderNumber: number;
 
   @ManyToOne(() => User, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'user_id' })
@@ -115,6 +124,18 @@ export class Order {
 
   @Column({ name: 'dispatched_at', type: 'timestamptz', nullable: true })
   dispatchedAt: Date | null;
+
+  /**
+   * Acreditación del pago (lo fija `OrdersService.changeStatus` al pasar a
+   * "pagado"). CU-14 (precondición 4, flujo 2c) cuenta desde acá las 24 h
+   * de cancelación por cuenta propia.
+   */
+  @Column({ name: 'paid_at', type: 'timestamptz', nullable: true })
+  paidAt: Date | null;
+
+  /** Entrega (al pasar a "entregado", CU-19). CU-15 cuenta desde acá los 10 días de posventa. */
+  @Column({ name: 'delivered_at', type: 'timestamptz', nullable: true })
+  deliveredAt: Date | null;
 
   @OneToMany(() => OrderItem, (item) => item.order)
   items: Relation<OrderItem>[];

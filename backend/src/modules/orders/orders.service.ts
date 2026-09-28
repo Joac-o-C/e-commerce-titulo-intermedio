@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, LessThan, Repository } from 'typeorm';
@@ -63,7 +63,16 @@ export class OrdersService {
     const from = order.status;
     order.status = to;
     order.cancellationCause = to === OrderStatus.CANCELADO ? opts.cancellationCause! : null;
-    await manager.update(Order, order.id, { status: to, cancellationCause: order.cancellationCause });
+    // Fechas de hito que usan las ventanas de CU-14 (24 h desde el pago) y
+    // CU-15 (10 días desde la entrega).
+    if (to === OrderStatus.PAGADO) order.paidAt = new Date();
+    if (to === OrderStatus.ENTREGADO) order.deliveredAt = new Date();
+    await manager.update(Order, order.id, {
+      status: to,
+      cancellationCause: order.cancellationCause,
+      paidAt: order.paidAt,
+      deliveredAt: order.deliveredAt,
+    });
     await this.recordHistory(manager, order.id, from, to, opts);
   }
 
@@ -96,6 +105,28 @@ export class OrdersService {
     if (!order) return null;
     order.items = await manager.find(OrderItem, { where: { orderId } });
     return order;
+  }
+
+  /**
+   * Devuelve al catálogo el stock de un pedido que se cancela (CU-14 paso
+   * 6, y la misma operación de CU-19): si todavía estaba reservado, libera
+   * la reserva; si ya se había descontado en firme (pedido pagado),
+   * reingresa lo descontado — sólo los ítems que de verdad se descontaron,
+   * no el faltante de CU-05 7a-1.
+   *
+   * @usecase CU-14 Cancelar pedido (paso 6)
+   */
+  async returnStockOnCancel(manager: EntityManager, order: Order, actorId: string | null): Promise<void> {
+    await this.releaseReservation(manager, order);
+    const committed = order.items.filter((item) => item.stockCommitted);
+    if (committed.length === 0) return;
+    await this.stockReservation.restockCancelledSale(
+      manager,
+      committed.map((item) => ({ variantId: item.variantId, quantity: item.quantity })),
+      { reason: `Cancelación — pedido #${order.orderNumber}`, actorId },
+    );
+    await manager.update(OrderItem, { id: In(committed.map((item) => item.id)) }, { stockCommitted: false });
+    for (const item of committed) item.stockCommitted = false;
   }
 
   /** Libera la reserva de stock del pedido si todavía la tenía (CU-03 17a/18a, CU-05 7.b). */
@@ -147,6 +178,11 @@ export class OrdersService {
         });
         order.stockReservationActive = false;
         await manager.update(Order, order.id, { stockReservationActive: false });
+        const committed = order.items.filter((item) => !shortages.some((s) => s.variantId === item.variantId));
+        if (committed.length > 0) {
+          await manager.update(OrderItem, { id: In(committed.map((item) => item.id)) }, { stockCommitted: true });
+          for (const item of committed) item.stockCommitted = true;
+        }
 
         if (shortages.length > 0) {
           // CU-05 (flujo 7a-1): se confirma el pago igual, se anota el
@@ -268,38 +304,6 @@ export class OrdersService {
 
   findById(orderId: string): Promise<Order | null> {
     return this.orderRepo.findOne({ where: { id: orderId } });
-  }
-
-  /**
-   * CU-05 (paso 11): estado actual del pedido cuando el Cliente vuelve de
-   * la pasarela. El detalle completo con historial es CU-13 (Fase 5).
-   */
-  async findOwnedOrFail(userId: string, orderId: string) {
-    const order = await this.orderRepo.findOne({
-      where: { id: orderId, userId },
-      relations: { items: true },
-    });
-    if (!order) throw new NotFoundException('El pedido no existe');
-    return {
-      id: order.id,
-      status: order.status,
-      subtotal: order.subtotal,
-      shippingCost: order.shippingCost,
-      total: order.total,
-      shippingMethod: order.shippingMethodSnapshot,
-      shippingAddress: order.shippingAddressSnapshot,
-      reservationExpiresAt: order.reservationExpiresAt,
-      createdAt: order.createdAt,
-      items: order.items.map((item) => ({
-        id: item.id,
-        productId: item.productId,
-        productName: item.productNameSnapshot,
-        variantAttributes: item.variantAttributesSnapshot,
-        quantity: item.quantity,
-        unitPrice: item.unitPriceSnapshot,
-        subtotal: item.subtotal,
-      })),
-    };
   }
 
   private stockLines(order: Order): StockLine[] {
