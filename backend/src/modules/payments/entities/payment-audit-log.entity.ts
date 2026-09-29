@@ -13,12 +13,21 @@ export enum PaymentAuditEvent {
   DISCREPANCIA = 'discrepancia',
   /** CU-05 (paso 10): pago procesado. */
   PAGO_PROCESADO = 'pago_procesado',
+  /** CU-21 (pasos 4-6): la pasarela aceptó el pedido de reembolso. */
+  REEMBOLSO_SOLICITADO = 'reembolso_solicitado',
+  /** CU-21 (pasos 9-11): la pasarela confirmó el reembolso. */
+  REEMBOLSO_ACREDITADO = 'reembolso_acreditado',
+  /** CU-21 (flujos 5a/9a): la pasarela rechazó el reembolso. */
+  REEMBOLSO_RECHAZADO = 'reembolso_rechazado',
+  /** CU-21 (flujo 4a): la pasarela no respondió tras los reintentos. */
+  REEMBOLSO_PASARELA_NO_DISPONIBLE = 'reembolso_pasarela_no_disponible',
+  /** Gestión del Administrador sobre un reembolso rechazado o pendiente. */
+  REEMBOLSO_GESTION_MANUAL = 'reembolso_gestion_manual',
 }
 
 /**
- * Auditoría de cada evento de pago recibido y procesado (CU-05 paso 10 y
- * Observaciones; más adelante también CU-21). Estaba previsto para la Fase
- * 6 junto con los reembolsos, pero CU-05 ya lo exige.
+ * Auditoría de cada evento de pago y de reembolso (CU-05 paso 10, CU-21
+ * paso 11).
  */
 @Entity('payment_audit_logs')
 @Index(['orderId', 'createdAt'])

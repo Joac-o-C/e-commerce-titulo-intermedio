@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 import { StockReservationService } from '../products/stock/stock-reservation.service.js';
+import { OrderNote } from './entities/order-note.entity.js';
 import { Order } from './entities/order.entity.js';
 import { OrderCancellationCause, OrderStatus } from './order-status.js';
 import { OrdersService } from './orders.service.js';
@@ -12,7 +13,6 @@ const order = (overrides: Partial<Order> = {}): Order =>
     status: OrderStatus.PENDIENTE_PAGO,
     stockReservationActive: true,
     reservationExpiresAt: new Date('2026-01-02T00:00:00Z'),
-    internalNotes: null,
     paidAt: null,
     deliveredAt: null,
     items: [{ id: 'item-1', variantId: 'variant-1', quantity: 2, productNameSnapshot: 'Remera', stockCommitted: false }],
@@ -97,7 +97,7 @@ describe('OrdersService', () => {
       expect(stock.confirmSale).toHaveBeenCalledWith(manager, expect.anything(), expect.objectContaining({ reservationActive: false }));
       expect(o.status).toBe(OrderStatus.PAGADO);
       expect(result.shortages).toHaveLength(1);
-      expect(o.internalNotes).toContain('Remera ×2');
+      expect(manager.create).toHaveBeenCalledWith(OrderNote, expect.objectContaining({ text: expect.stringContaining('Remera ×2') }));
       // El ítem del faltante no se descontó: al cancelar no hay que reingresarlo.
       expect(o.items[0].stockCommitted).toBe(false);
     });
@@ -138,7 +138,10 @@ describe('OrdersService', () => {
 
       expect(o.status).toBe(OrderStatus.PAGO_PENDIENTE_ACREDITACION);
       expect(o.stockReservationActive).toBe(false);
-      expect(o.internalNotes).toContain('no se pudo volver a reservar');
+      expect(manager.create).toHaveBeenCalledWith(
+        OrderNote,
+        expect.objectContaining({ text: expect.stringContaining('no se pudo volver a reservar') }),
+      );
     });
 
     it('7.b: rechazado → "pago rechazado" y libera la reserva', async () => {

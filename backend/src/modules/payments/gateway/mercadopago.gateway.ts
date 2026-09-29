@@ -1,14 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MercadoPagoConfig, MPNotFoundError, Payment, Preference } from 'mercadopago';
+import {
+  MercadoPagoConfig,
+  MPBadRequestError,
+  MPNotFoundError,
+  MPPaymentError,
+  MPValidationError,
+  Payment,
+  PaymentRefund,
+  Preference,
+} from 'mercadopago';
 import type { PreferenceUpdateData } from 'mercadopago/dist/clients/preference/update/types.js';
 import type {
   CreatePreferenceInput,
+  CreateRefundInput,
   CreatedPreference,
   GatewayPayment,
+  GatewayRefund,
   PaymentGateway,
 } from './payment-gateway.interface.js';
-import { PaymentGatewayUnavailableError, PaymentNotFoundError } from './payment-gateway.interface.js';
+import { PaymentGatewayUnavailableError, PaymentNotFoundError, RefundRejectedError } from './payment-gateway.interface.js';
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -20,6 +31,7 @@ const REQUEST_TIMEOUT_MS = 10_000;
 export class MercadoPagoGateway implements PaymentGateway {
   private readonly preferences: Preference;
   private readonly payments: Payment;
+  private readonly refunds: PaymentRefund;
   private readonly isTestToken: boolean;
   private readonly frontendUrl: string;
   private readonly notificationUrl: string | undefined;
@@ -30,6 +42,7 @@ export class MercadoPagoGateway implements PaymentGateway {
     const client = new MercadoPagoConfig({ accessToken, options: { timeout: REQUEST_TIMEOUT_MS } });
     this.preferences = new Preference(client);
     this.payments = new Payment(client);
+    this.refunds = new PaymentRefund(client);
     this.isTestToken = accessToken.startsWith('TEST-');
     this.frontendUrl = config.get<string>('FRONTEND_URL')!;
     this.notificationUrl = config.get<string>('MP_NOTIFICATION_URL');
@@ -106,6 +119,37 @@ export class MercadoPagoGateway implements PaymentGateway {
     } catch (err) {
       throw new PaymentGatewayUnavailableError(`MercadoPago no respondió la búsqueda de pagos del pedido ${orderId}`, err);
     }
+  }
+
+  /** @usecase CU-21 Procesar reembolso (pasos 4-5) */
+  async createRefund(input: CreateRefundInput): Promise<GatewayRefund> {
+    try {
+      const refund = await this.refunds.create({
+        payment_id: input.paymentId,
+        body: { amount: input.amount },
+        requestOptions: { idempotencyKey: input.idempotencyKey },
+      });
+      return this.normalizeRefund(refund, input.paymentId);
+    } catch (err) {
+      // CU-21 (flujo 5a): MercadoPago respondió y no admite el reembolso.
+      if (err instanceof MPBadRequestError || err instanceof MPPaymentError || err instanceof MPValidationError) {
+        throw new RefundRejectedError(`MercadoPago rechazó el reembolso del pago ${input.paymentId}`, err);
+      }
+      throw new PaymentGatewayUnavailableError(`MercadoPago no respondió el reembolso del pago ${input.paymentId}`, err);
+    }
+  }
+
+  /** @usecase CU-21 Procesar reembolso (paso 8) */
+  async getRefund(paymentId: string, refundId: string): Promise<GatewayRefund> {
+    try {
+      return this.normalizeRefund(await this.refunds.get({ payment_id: paymentId, refund_id: refundId }), paymentId);
+    } catch (err) {
+      throw new PaymentGatewayUnavailableError(`MercadoPago no respondió la consulta del reembolso ${refundId}`, err);
+    }
+  }
+
+  private normalizeRefund(r: { id?: number; status?: string; amount?: number }, paymentId: string): GatewayRefund {
+    return { id: String(r.id), paymentId, status: r.status ?? 'unknown', amount: r.amount ?? 0, raw: r };
   }
 
   private normalize(p: {

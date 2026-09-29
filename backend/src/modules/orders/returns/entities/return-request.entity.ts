@@ -14,6 +14,7 @@ import { User } from '../../../users/entities/user.entity.js';
 import { Order } from '../../entities/order.entity.js';
 import { ReturnRequestItem } from './return-request-item.entity.js';
 import { ReturnRequestPhoto } from './return-request-photo.entity.js';
+import { ReturnReplacement } from './return-replacement.entity.js';
 
 /** Estados de la solicitud fijados en CU-15 (Observaciones). */
 export enum ReturnRequestStatus {
@@ -67,10 +68,22 @@ export class ReturnRequest {
   @OneToMany(() => ReturnRequestPhoto, (photo) => photo.returnRequest)
   photos: Relation<ReturnRequestPhoto>[];
 
+  @OneToMany(() => ReturnReplacement, (replacement) => replacement.returnRequest)
+  replacements: Relation<ReturnReplacement>[];
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  // Resolución (CU-22, Fase 6).
+  // Resolución (CU-22).
+  /** CU-22 (paso 6). Desde acá corren los 10 días para recibir el producto (flujo 8a). */
+  @Column({ name: 'approved_at', type: 'timestamptz', nullable: true })
+  approvedAt: Date | null;
+
+  /** CU-22 (paso 8). */
+  @Column({ name: 'received_at', type: 'timestamptz', nullable: true })
+  receivedAt: Date | null;
+
+  /** Rechazo (3a) o resolución (11): cuándo quedó cerrada. */
   @Column({ name: 'resolved_at', type: 'timestamptz', nullable: true })
   resolvedAt: Date | null;
 
@@ -81,6 +94,18 @@ export class ReturnRequest {
   @Column({ name: 'resolved_by_user_id', type: 'uuid', nullable: true })
   resolvedByUserId: string | null;
 
+  /**
+   * Lo que ve el Cliente: motivo del rechazo (3a) o de la parte no aprobada
+   * (4a), o la nota de la resolución.
+   */
   @Column({ name: 'resolution_note', type: 'text', nullable: true })
   resolutionNote: string | null;
+
+  /** CU-22 (paso 4, flujo 9a): nota interna del Administrador; el Cliente no la ve. */
+  @Column({ name: 'internal_note', type: 'text', nullable: true })
+  internalNote: string | null;
+
+  /** Reembolso de una devolución (CU-22 paso 10 → CU-21). */
+  @Column({ name: 'refund_id', type: 'uuid', nullable: true })
+  refundId: string | null;
 }

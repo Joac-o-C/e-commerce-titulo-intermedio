@@ -116,6 +116,9 @@ export class NotificationsService {
       [EmailTemplate.RESULTADO_PAGO]: 'Novedades sobre el pago de tu pedido',
       [EmailTemplate.CANCELACION]: 'Tu pedido fue cancelado',
       [EmailTemplate.COMPROBANTE_POSVENTA]: 'Recibimos tu solicitud de cambio o devolución',
+      [EmailTemplate.RESULTADO_POSVENTA]: 'Novedades sobre tu solicitud de cambio o devolución',
+      [EmailTemplate.CAMBIO_ESTADO_PEDIDO]: 'Tu pedido cambió de estado',
+      [EmailTemplate.RESULTADO_REEMBOLSO]: 'Novedades sobre tu reembolso',
     };
     return {
       subject: subjects[template] ?? `Notificación: ${template}`,

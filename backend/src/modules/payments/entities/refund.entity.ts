@@ -9,6 +9,7 @@ import {
   type Relation,
 } from 'typeorm';
 import { Order } from '../../orders/entities/order.entity.js';
+import { User } from '../../users/entities/user.entity.js';
 import { Payment } from './payment.entity.js';
 
 /** Estados de CU-21 ("reembolso en trámite", "reembolsado", "reembolso rechazado", "pendiente de gestión"). */
@@ -19,12 +20,20 @@ export enum RefundStatus {
   PENDIENTE_DE_GESTION = 'pendiente_de_gestion',
 }
 
-/** Caso de uso que pidió el reembolso (CU-21 paso 3). */
+/**
+ * Caso de uso que pidió el reembolso (CU-21 paso 3). `CU-05` cubre los
+ * reembolsos automáticos que decidió el usuario en la Fase 6: un pago
+ * acreditado sobre un pedido ya cancelado o ya pagado (doble cobro).
+ */
 export enum RefundOrigin {
+  CU_05 = 'CU-05',
   CU_14 = 'CU-14',
   CU_19 = 'CU-19',
   CU_22 = 'CU-22',
 }
+
+/** Requieren que el Administrador reintente o lo resuelva por fuera (alerta de CU-21 4a/5a). */
+export const REFUND_NEEDS_ATTENTION: readonly RefundStatus[] = [RefundStatus.RECHAZADO, RefundStatus.PENDIENTE_DE_GESTION];
 
 /**
  * Reembolso de un pago acreditado (CU-21). Se registra "en trámite" dentro
@@ -33,9 +42,8 @@ export enum RefundOrigin {
  * así nunca queda una cancelación firme sin su reembolso anotado, ni un
  * reembolso pedido a la pasarela por una cancelación que hizo rollback.
  *
- * Fase 5: sólo el registro. `externalRefundId` null + `en_tramite` =
- * todavía no se pidió a la pasarela; la ejecución y el webhook de
- * resultado son la Fase 6.
+ * `externalRefundId` null + `en_tramite` = todavía no se pidió a la
+ * pasarela (o el pedido quedó a mitad): `RefundsService` lo retoma.
  */
 @Entity('refunds')
 @Index(['orderId', 'createdAt'])
@@ -77,4 +85,27 @@ export class Refund {
 
   @Column({ name: 'resolved_at', type: 'timestamptz', nullable: true })
   resolvedAt: Date | null;
+
+  /**
+   * Intento de pedido a la pasarela. Forma la clave de idempotencia: el
+   * mismo intento reenviado (timeout, cron) nunca crea un segundo reembolso;
+   * sólo un reintento del Administrador tras un rechazo abre un intento nuevo.
+   */
+  @Column({ type: 'int', default: 1 })
+  attempt: number;
+
+  /** Último error de la pasarela (rechazo o falta de respuesta), para el Administrador. */
+  @Column({ name: 'last_error', type: 'varchar', nullable: true })
+  lastError: string | null;
+
+  /** Resolución manual del Administrador ("devuelto por fuera"). */
+  @Column({ name: 'resolution_note', type: 'text', nullable: true })
+  resolutionNote: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'resolved_by_user_id' })
+  resolvedBy: Relation<User> | null;
+
+  @Column({ name: 'resolved_by_user_id', type: 'uuid', nullable: true })
+  resolvedByUserId: string | null;
 }

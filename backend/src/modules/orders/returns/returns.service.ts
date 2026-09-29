@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, QueryFailedError } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { STORAGE_SERVICE, type StorageService } from '../../../providers/storage/storage.interface.js';
 import { EmailTemplate } from '../../notifications/entities/email-log.entity.js';
 import { NotificationsService } from '../../notifications/notifications.service.js';
@@ -16,6 +16,7 @@ import { Order } from '../entities/order.entity.js';
 import { OrderItem } from '../entities/order-item.entity.js';
 import { returnWindow } from '../order-policies.js';
 import { CreateReturnRequestDto } from './dto/create-return-request.dto.js';
+import { eligibleUnits } from './return-eligibility.js';
 import { ReturnRequestItem } from './entities/return-request-item.entity.js';
 import { ReturnRequestPhoto } from './entities/return-request-photo.entity.js';
 import { ReturnRequest, ReturnRequestStatus } from './entities/return-request.entity.js';
@@ -28,17 +29,6 @@ export const RETURN_INSTRUCTIONS =
   'Embalá el o los productos con todos sus accesorios y, si podés, en su caja original. ' +
   'En las próximas 48 horas hábiles te enviamos por correo la etiqueta de envío para despacharlo desde cualquier sucursal del correo. ' +
   'El costo del envío lo cubre la tienda. Cuando recibamos el producto revisamos la solicitud y te avisamos el resultado.';
-
-/** CU-15 (flujo 6a): el ítem ya tiene una solicitud, se muestra la existente. */
-class ReturnAlreadyRequestedException extends ConflictException {
-  constructor(requestNumbers: number[]) {
-    super({
-      code: 'RETURN_ALREADY_REQUESTED',
-      message: `Ya existe una solicitud para ese producto (solicitud #${requestNumbers.join(', #')})`,
-      requestNumbers,
-    });
-  }
-}
 
 /**
  * CU-15 Solicitar cambio o devolución: sólo el alta por el Cliente. La
@@ -96,9 +86,13 @@ export class ReturnsService {
             status: ReturnRequestStatus.SOLICITADA,
             type: dto.type,
             reason: dto.reason,
+            approvedAt: null,
+            receivedAt: null,
             resolvedAt: null,
             resolvedByUserId: null,
             resolutionNote: null,
+            internalNote: null,
+            refundId: null,
           }),
         );
         request.items = await manager.save(
@@ -108,6 +102,9 @@ export class ReturnsService {
               orderItemId: item.orderItemId,
               quantityRequested: item.quantity,
               quantityApproved: null,
+              quantityReceived: null,
+              condition: null,
+              refundApproved: null,
             }),
           ),
         );
@@ -118,11 +115,6 @@ export class ReturnsService {
       });
     } catch (err) {
       await Promise.all(uploaded.map((url) => this.storage.remove(url)));
-      if (this.isUniqueViolation(err)) {
-        // CU-15 (flujo 6a): otra solicitud sobre el mismo ítem se creó en
-        // paralelo y ganó la UNIQUE de `return_request_items`.
-        throw new ReturnAlreadyRequestedException(await this.existingRequestNumbers(ids));
-      }
       throw err;
     }
 
@@ -167,13 +159,11 @@ export class ReturnsService {
     if (!window.allowed) throw new ConflictException({ code: window.code, message: window.message });
 
     const orderItems = await manager.find(OrderItem, { where: { orderId } });
-    const alreadyRequested = await manager.find(ReturnRequestItem, {
-      where: { orderItemId: In(orderItems.map((i) => i.id)) },
-      relations: { returnRequest: true },
-    });
+    const previous = await manager.find(ReturnRequest, { where: { orderId }, relations: { items: true } });
+    const eligible = new Map(orderItems.map((i) => [i.id, eligibleUnits(i.id, i.quantity, previous)]));
 
-    // CU-15 (flujo 3a): ningún ítem elegible.
-    if (alreadyRequested.length >= orderItems.length) {
+    // CU-15 (flujo 3a): ningún ítem tiene unidades para pedir.
+    if ([...eligible.values()].every((units) => units === 0)) {
       throw new ConflictException({
         code: 'NO_ELIGIBLE_ITEMS',
         message: 'Todos los productos de este pedido ya tienen una solicitud de cambio o devolución',
@@ -189,19 +179,23 @@ export class ReturnsService {
           `Pediste ${requested.quantity} unidades de "${item.productNameSnapshot}", pero compraste ${item.quantity}`,
         );
       }
-      // CU-15 (precondición 4, flujo 6a).
-      const previous = alreadyRequested.find((r) => r.orderItemId === item.id);
-      if (previous) throw new ReturnAlreadyRequestedException([previous.returnRequest.requestNumber]);
+      // CU-15 (precondición 4, flujo 6a): unidades ya pedidas o aprobadas,
+      // incluso por otra solicitud creada en paralelo (el lock del pedido
+      // la serializa con ésta).
+      const units = eligible.get(item.id)!;
+      if (requested.quantity > units) {
+        const open = previous
+          .filter((r) => r.status !== ReturnRequestStatus.RECHAZADA && r.items.some((ri) => ri.orderItemId === item.id))
+          .map((r) => r.requestNumber);
+        throw new ConflictException({
+          code: 'RETURN_ALREADY_REQUESTED',
+          message: `De "${item.productNameSnapshot}" podés pedir ${units} unidad(es): el resto ya está en la solicitud #${open.join(', #')}`,
+          requestNumbers: open,
+          eligibleUnits: units,
+        });
+      }
     }
     return { order };
-  }
-
-  private async existingRequestNumbers(orderItemIds: string[]): Promise<number[]> {
-    const rows = await this.dataSource.getRepository(ReturnRequestItem).find({
-      where: { orderItemId: In(orderItemIds) },
-      relations: { returnRequest: true },
-    });
-    return [...new Set(rows.map((r) => r.returnRequest.requestNumber))];
   }
 
   private async notify(userId: string, order: Order, request: ReturnRequest): Promise<void> {
@@ -219,9 +213,5 @@ export class ReturnsService {
         instructions: RETURN_INSTRUCTIONS,
       },
     });
-  }
-
-  private isUniqueViolation(err: unknown): boolean {
-    return err instanceof QueryFailedError && (err.driverError as { code?: string } | undefined)?.code === '23505';
   }
 }

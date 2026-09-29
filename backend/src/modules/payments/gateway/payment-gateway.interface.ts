@@ -63,6 +63,39 @@ export class PaymentNotFoundError extends Error {
   }
 }
 
+/** Reembolso tal como lo informa la pasarela (CU-21 pasos 5 y 8), ya normalizado. */
+export interface GatewayRefund {
+  id: string;
+  paymentId: string;
+  /** Estado crudo: approved, in_process, rejected, cancelled. */
+  status: string;
+  amount: number;
+  raw: unknown;
+}
+
+export interface CreateRefundInput {
+  /** Id del pago en la pasarela (`Payment.externalPaymentId`). */
+  paymentId: string;
+  amount: number;
+  /**
+   * Clave de idempotencia: reintentar con la misma clave (timeout, cron que
+   * retoma un envío) devuelve el mismo reembolso en vez de crear otro.
+   */
+  idempotencyKey: string;
+}
+
+/**
+ * La pasarela respondió y rechazó el reembolso (CU-21 flujo 5a: pago muy
+ * antiguo, medio que no admite reversa, saldo insuficiente). A diferencia
+ * de `PaymentGatewayUnavailableError`, reintentar no lo arregla.
+ */
+export class RefundRejectedError extends Error {
+  constructor(message: string, readonly cause?: unknown) {
+    super(message);
+    this.name = 'RefundRejectedError';
+  }
+}
+
 /**
  * Puerto hacia la Pasarela de Pago (actor secundario de CU-03, principal de
  * CU-05). `orders` y `payments` dependen sólo de esta interfaz: en
@@ -80,4 +113,8 @@ export interface PaymentGateway {
    * 7b). Puede fallar con `PaymentGatewayUnavailableError`.
    */
   expirePreference(preferenceId: string): Promise<void>;
+  /** CU-21 (pasos 4-5). Puede fallar con `RefundRejectedError` o `PaymentGatewayUnavailableError`. */
+  createRefund(input: CreateRefundInput): Promise<GatewayRefund>;
+  /** CU-21 (paso 8): estado real del reembolso, sin confiar en el webhook. */
+  getRefund(paymentId: string, refundId: string): Promise<GatewayRefund>;
 }

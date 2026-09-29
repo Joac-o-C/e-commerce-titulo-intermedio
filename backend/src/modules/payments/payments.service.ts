@@ -30,6 +30,8 @@ import {
 } from './gateway/payment-gateway.interface.js';
 import type { PaymentGateway } from './gateway/payment-gateway.interface.js';
 import { verifyWebhookSignature } from './gateway/webhook-signature.js';
+import { PaymentLedgerService } from './ledger/payment-ledger.service.js';
+import { RefundsService } from './refunds/refunds.service.js';
 
 export interface WebhookNotification {
   headers: Record<string, string | string[] | undefined>;
@@ -99,6 +101,8 @@ export class PaymentsService {
     private readonly ordersService: OrdersService,
     private readonly usersService: UsersService,
     private readonly notificationsService: NotificationsService,
+    private readonly ledger: PaymentLedgerService,
+    private readonly refunds: RefundsService,
     config: ConfigService,
   ) {
     this.webhookSecret = config.get<string>('PAYMENT_WEBHOOK_SECRET')!;
@@ -142,6 +146,11 @@ export class PaymentsService {
       return 'invalid';
     }
 
+    // MercadoPago avisa los reembolsos por este mismo tópico: primero se
+    // reconcilian los reembolsos en trámite del pago (CU-21 pasos 7-8).
+    await this.refunds.reconcilePayment(dataId).catch((err: unknown) => {
+      this.logger.error(`Pago ${dataId}: falló la reconciliación de sus reembolsos`, err as Error);
+    });
     return this.processPayment(dataId, 'webhook');
   }
 
@@ -208,7 +217,7 @@ export class PaymentsService {
 
     type TxResult =
       | { kind: 'duplicate'; previous: PaymentStatus }
-      | { kind: 'discrepancy'; detail: string }
+      | { kind: 'discrepancy'; detail: string; refundId?: string }
       | {
           kind: 'processed';
           applied: ApplyPaymentResult;
@@ -249,7 +258,7 @@ export class PaymentsService {
         }
 
         // CU-05 (paso 8): registro del pago.
-        await manager.save(
+        const saved = await manager.save(
           Object.assign(existing ?? manager.create(Payment), {
             orderId: order.id,
             provider: 'mercadopago',
@@ -289,7 +298,18 @@ export class PaymentsService {
             order,
             applied.discrepancy,
           );
-          return { kind: 'discrepancy', detail: applied.discrepancy };
+          // Doble cobro o pago sobre un pedido cancelado: se devuelve el
+          // pago completo (CU-21), en la misma transacción que su registro.
+          const refund = applied.refundOrigin
+            ? await this.ledger.requestRefund(manager, {
+                orderId: order.id,
+                amount: saved.amount,
+                originCu: applied.refundOrigin,
+                reason: applied.discrepancy,
+                paymentId: saved.id,
+              })
+            : null;
+          return { kind: 'discrepancy', detail: applied.discrepancy, refundId: refund?.id };
         }
         return {
           kind: 'processed',
@@ -316,6 +336,7 @@ export class PaymentsService {
 
     if (result.kind === 'discrepancy') {
       this.logger.warn(`Pedido ${orderId}: ${result.detail}`);
+      if (result.refundId) await this.refunds.dispatch(result.refundId);
       await this.audit(PaymentAuditEvent.DISCREPANCIA, {
         orderId,
         externalPaymentId: payment.id,

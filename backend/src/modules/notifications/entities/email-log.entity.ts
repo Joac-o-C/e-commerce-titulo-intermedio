@@ -14,6 +14,8 @@ export enum EmailTemplate {
   CAMBIO_ESTADO_PEDIDO = 'cambio_estado_pedido',
   CANCELACION = 'cancelacion',
   COMPROBANTE_POSVENTA = 'comprobante_posventa',
+  /** CU-22: aprobación, rechazo, resolución y reposición despachada (décima plantilla, Fase 6). */
+  RESULTADO_POSVENTA = 'resultado_posventa',
   RESULTADO_REEMBOLSO = 'resultado_reembolso',
 }
 

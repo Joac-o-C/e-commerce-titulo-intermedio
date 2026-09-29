@@ -2,8 +2,10 @@ import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, LessThan, Repository } from 'typeorm';
+import { RefundOrigin } from '../payments/entities/refund.entity.js';
 import { StockReservationService, type StockLine } from '../products/stock/stock-reservation.service.js';
 import { OrderItem } from './entities/order-item.entity.js';
+import { OrderNote } from './entities/order-note.entity.js';
 import { OrderStatusHistory } from './entities/order-status-history.entity.js';
 import { Order } from './entities/order.entity.js';
 import {
@@ -22,6 +24,12 @@ export interface ApplyPaymentResult {
   changed: boolean;
   /** Algo que no se aplica pero queda para revisión del Administrador (CU-05 7b-1, doble pago). */
   discrepancy?: string;
+  /**
+   * El pago aprobado no corresponde (doble cobro, o pedido cancelado a
+   * propósito): se devuelve completo, registrado con este origen (decisión
+   * de la Fase 6: reembolso automático).
+   */
+  refundOrigin?: RefundOrigin;
   /** CU-05 (7a-1): ítems cuyo stock ya no alcanzó al confirmar el pago. */
   shortages?: StockLine[];
 }
@@ -157,15 +165,22 @@ export class OrdersService {
         if (paid) {
           return {
             changed: false,
-            discrepancy: `Pago ${externalPaymentId} aprobado sobre un pedido que ya estaba "${order.status}" (posible doble cobro)`,
+            discrepancy: `Pago ${externalPaymentId} aprobado sobre un pedido que ya estaba "${order.status}" (doble cobro): se reembolsa`,
+            refundOrigin: RefundOrigin.CU_05,
           };
         }
         if (order.status === OrderStatus.CANCELADO && order.cancellationCause !== OrderCancellationCause.RESERVA_VENCIDA) {
           // Cancelado a propósito (cliente, administrador o falla de la
-          // pasarela): un pago tardío no lo revive, hay que devolverlo (CU-21).
+          // pasarela): un pago tardío no lo revive, se devuelve (CU-21).
           return {
             changed: false,
-            discrepancy: `Pago ${externalPaymentId} aprobado sobre un pedido cancelado (${order.cancellationCause}): requiere reembolso`,
+            discrepancy: `Pago ${externalPaymentId} aprobado sobre un pedido cancelado (${order.cancellationCause}): se reembolsa`,
+            refundOrigin:
+              order.cancellationCause === OrderCancellationCause.CLIENTE
+                ? RefundOrigin.CU_14
+                : order.cancellationCause === OrderCancellationCause.ADMINISTRADOR
+                  ? RefundOrigin.CU_19
+                  : RefundOrigin.CU_05,
           };
         }
         // CU-05 (7.a): descuento firme del stock. Si la reserva ya se había
@@ -247,10 +262,9 @@ export class OrdersService {
     }
   }
 
-  async appendInternalNote(manager: EntityManager, order: Order, note: string): Promise<void> {
-    const stamped = `[${new Date().toISOString()}] ${note}`;
-    order.internalNotes = order.internalNotes ? `${order.internalNotes}\n${stamped}` : stamped;
-    await manager.update(Order, order.id, { internalNotes: order.internalNotes });
+  /** Nota interna (sólo panel, CU-19). `authorId` null = nota automática del sistema. */
+  async appendInternalNote(manager: EntityManager, order: Order, note: string, authorId: string | null = null): Promise<void> {
+    await manager.save(manager.create(OrderNote, { orderId: order.id, authorId, text: note }));
   }
 
   /**

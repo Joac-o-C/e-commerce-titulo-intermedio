@@ -111,10 +111,6 @@ export class Order {
   @Column({ name: 'payment_preference_id', type: 'varchar', nullable: true })
   paymentPreferenceId: string | null;
 
-  /** Notas para el Administrador, p. ej. el faltante de stock de CU-05 (7a-1). Se muestran en CU-19. */
-  @Column({ name: 'internal_notes', type: 'text', nullable: true })
-  internalNotes: string | null;
-
   // Datos de despacho (CU-19, Fase 6). Opcionales, según la consolidación de CU.
   @Column({ name: 'tracking_carrier', type: 'varchar', nullable: true })
   trackingCarrier: string | null;

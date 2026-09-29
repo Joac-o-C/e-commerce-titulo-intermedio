@@ -20,6 +20,8 @@ export enum StockMovementType {
   // CU-14/CU-19: reingreso del stock de un pedido pagado que se cancela
   // antes del despacho. Actor = quien canceló.
   CANCELACION = 'cancelacion',
+  // CU-22 (flujo 10a): salida de la unidad de reposición de un cambio.
+  CAMBIO = 'cambio',
 }
 
 /**

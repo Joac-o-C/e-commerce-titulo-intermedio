@@ -164,6 +164,91 @@ export class StockReservationService {
   }
 
   /**
+   * CU-22 (paso 9, flujo 9a): reingreso de lo devuelto. En buen estado
+   * vuelve al stock vendible (movimiento "devolución"); dañado entra y sale
+   * como "merma" (decisión de la Fase 6: el stock vendible no cambia, pero
+   * queda la traza en CU-18).
+   *
+   * @usecase CU-22 Resolver solicitud de cambio o devolución (paso 9)
+   */
+  async restockReturn(
+    manager: EntityManager,
+    lines: (StockLine & { damaged: boolean })[],
+    opts: { reason: string; actorId: string },
+  ): Promise<void> {
+    for (const line of [...lines].sort((a, b) => a.variantId.localeCompare(b.variantId))) {
+      await this.move(manager, line, +line.quantity, StockMovementType.DEVOLUCION, opts);
+      if (line.damaged) {
+        await this.move(manager, line, -line.quantity, StockMovementType.MERMA, {
+          ...opts,
+          reason: `${opts.reason} (llegó dañado)`,
+        });
+      }
+    }
+  }
+
+  /**
+   * CU-22 (flujo 10a): salida de la unidad de reposición de un cambio.
+   * Mismo UPDATE condicional que la reserva: nunca deja el disponible en
+   * negativo. Devuelve false si no alcanza.
+   *
+   * @usecase CU-22 Resolver solicitud de cambio o devolución (flujo 10a)
+   */
+  async takeForReplacement(
+    manager: EntityManager,
+    line: StockLine,
+    opts: { reason: string; actorId: string },
+  ): Promise<boolean> {
+    const result = await manager
+      .createQueryBuilder()
+      .update(ProductVariant)
+      .set({ stockTotal: () => 'stock_total - :qty' })
+      .where('id = :id AND stock_total - stock_reserved >= :qty', { id: line.variantId, qty: line.quantity })
+      .execute();
+    if (result.affected !== 1) return false;
+    await this.recordMovement(manager, line, StockMovementType.CAMBIO, opts);
+    return true;
+  }
+
+  private async move(
+    manager: EntityManager,
+    line: StockLine,
+    delta: number,
+    type: StockMovementType,
+    opts: { reason: string; actorId: string | null },
+  ): Promise<void> {
+    await manager
+      .createQueryBuilder()
+      .update(ProductVariant)
+      .set({ stockTotal: () => 'stock_total + :delta' })
+      .where('id = :id', { id: line.variantId, delta })
+      .execute();
+    await this.recordMovement(manager, line, type, opts);
+  }
+
+  private async recordMovement(
+    manager: EntityManager,
+    line: StockLine,
+    type: StockMovementType,
+    opts: { reason: string; actorId: string | null },
+  ): Promise<void> {
+    const { stockTotal: resultingStockTotal } = await manager.findOneOrFail(ProductVariant, {
+      select: { id: true, stockTotal: true },
+      where: { id: line.variantId },
+    });
+    await manager.save(
+      manager.create(StockMovement, {
+        variantId: line.variantId,
+        type,
+        quantity: line.quantity,
+        resultingStockTotal,
+        reason: opts.reason,
+        actorId: opts.actorId,
+      }),
+    );
+  }
+
+  /**
    * Orden estable por variante: dos transacciones que reservan sobre las
    * mismas variantes toman los locks de fila en el mismo orden y no pueden
    * quedar en deadlock entre sí.

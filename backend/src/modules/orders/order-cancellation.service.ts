@@ -7,6 +7,7 @@ import { PAYMENT_GATEWAY } from '../payments/gateway/payment-gateway.interface.j
 import type { PaymentGateway } from '../payments/gateway/payment-gateway.interface.js';
 import { RefundOrigin } from '../payments/entities/refund.entity.js';
 import { PaymentLedgerService } from '../payments/ledger/payment-ledger.service.js';
+import { RefundsService } from '../payments/refunds/refunds.service.js';
 import { UsersService } from '../users/users.service.js';
 import type { Order } from './entities/order.entity.js';
 import { customerCancellation } from './order-policies.js';
@@ -16,6 +17,8 @@ import { OrdersService } from './orders.service.js';
 export interface CancellationEffects {
   /** Se registró un reembolso "en trámite" (CU-21 pasos 1-3). */
   refundRequested: boolean;
+  /** Reembolso a pedir a la pasarela después del commit (CU-21 pasos 4-6). */
+  refundId: string | null;
   /** Estado previo: si esperaba el pago, hay una preferencia que vencer (CU-14 7b). */
   previousStatus: OrderStatus;
 }
@@ -37,6 +40,7 @@ export class OrderCancellationService {
     private readonly gateway: PaymentGateway,
     private readonly ordersService: OrdersService,
     private readonly ledger: PaymentLedgerService,
+    private readonly refunds: RefundsService,
     private readonly notificationsService: NotificationsService,
     private readonly usersService: UsersService,
   ) {}
@@ -106,6 +110,11 @@ export class OrderCancellationService {
     opts: { actorId: string | null; cause: OrderCancellationCause; reason: string; refundOrigin: RefundOrigin },
   ): Promise<CancellationEffects> {
     const previousStatus = order.status;
+    // Decisión de la Fase 6 para CU-19: un pedido despachado ya salió del
+    // depósito — su stock no se reingresa solo (el Administrador lo hace en
+    // CU-18 cuando el paquete vuelve) y el envío no se reembolsa.
+    const dispatched = previousStatus === OrderStatus.DESPACHADO;
+
     // CU-14 (paso 5).
     await this.ordersService.changeStatus(manager, order, OrderStatus.CANCELADO, {
       actorId: opts.actorId,
@@ -113,19 +122,20 @@ export class OrderCancellationService {
       cancellationCause: opts.cause,
     });
     // CU-14 (paso 6).
-    await this.ordersService.returnStockOnCancel(manager, order, opts.actorId);
+    if (!dispatched) await this.ordersService.returnStockOnCancel(manager, order, opts.actorId);
 
-    // CU-14 (paso 7, flujo 7b): sin pago acreditado no hay reembolso. El
-    // importe es el total: el pedido todavía no se despachó.
+    // CU-14 (paso 7, flujo 7b): sin pago acreditado no hay reembolso.
     let refundRequested = false;
+    let refundId: string | null = null;
     if (order.paidAt) {
       const refund = await this.ledger.requestRefund(manager, {
         orderId: order.id,
-        amount: order.total,
+        amount: dispatched ? order.subtotal : order.total,
         originCu: opts.refundOrigin,
         reason: `Cancelación del pedido #${order.orderNumber}: ${opts.reason}`,
       });
       refundRequested = refund !== null;
+      refundId = refund?.id ?? null;
       if (!refund) {
         // CU-14 (flujo 7a): la cancelación queda firme igual; el
         // Administrador resuelve la devolución del dinero desde CU-19.
@@ -136,7 +146,7 @@ export class OrderCancellationService {
         );
       }
     }
-    return { refundRequested, previousStatus };
+    return { refundRequested, refundId, previousStatus };
   }
 
   /**
@@ -144,9 +154,13 @@ export class OrderCancellationService {
    * de un pedido impago y avisa al Cliente. Ninguna de las dos cosas
    * revierte la cancelación si falla (flujo 8a: el correo queda en EmailLog).
    *
-   * @usecase-includes CU-20
+   * @usecase-includes CU-20, CU-21
    */
   async afterCancellation(order: Order, effects: CancellationEffects): Promise<void> {
+    // CU-14 (paso 7) → CU-21 (pasos 4-6). No lanza: si la pasarela falla,
+    // el reembolso queda para el Administrador (flujo 7a).
+    if (effects.refundId) await this.refunds.dispatch(effects.refundId);
+
     if (AWAITING_PAYMENT_STATUSES.includes(effects.previousStatus) && order.paymentPreferenceId) {
       await this.gateway.expirePreference(order.paymentPreferenceId).catch((err: unknown) => {
         this.logger.warn(`Pedido ${order.id}: no se pudo vencer la preferencia de pago (${(err as Error).message})`);

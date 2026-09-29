@@ -10,6 +10,8 @@ export interface RefundRequest {
   amount: string;
   originCu: RefundOrigin;
   reason: string;
+  /** Pago puntual a reembolsar (id interno); si no se indica, el primero con saldo suficiente. */
+  paymentId?: string;
 }
 
 /** Estados en los que un reembolso ya comprometió (o devolvió) parte del saldo del pago. */
@@ -66,7 +68,9 @@ export class PaymentLedgerService {
     const amountCents = toCents(request.amount);
     // El reembolso va contra un pago puntual (CU-21 paso 4): el primero
     // que todavía tenga saldo suficiente.
-    const payment = approved.find((p) => this.refundableCents(p, refunds) >= amountCents);
+    const payment = approved.find(
+      (p) => (!request.paymentId || p.id === request.paymentId) && this.refundableCents(p, refunds) >= amountCents,
+    );
     if (amountCents <= 0 || !payment) {
       // CU-21 (flujo 2b): importe inválido o mayor al saldo reembolsable.
       this.logger.warn(
@@ -85,8 +89,25 @@ export class PaymentLedgerService {
         originCu: request.originCu,
         reason: request.reason,
         resolvedAt: null,
+        attempt: 1,
+        lastError: null,
+        resolutionNote: null,
+        resolvedByUserId: null,
       }),
     );
+  }
+
+  /**
+   * ¿Entra este reembolso en el saldo de su pago, sin contarse a sí mismo?
+   * Lo usa el reintento del Administrador: mientras estuvo rechazado no
+   * ocupaba saldo, y entre medio pudo registrarse otro reembolso.
+   */
+  async fitsInBalance(manager: EntityManager, refund: Refund): Promise<boolean> {
+    const payment = await manager.findOneByOrFail(Payment, { id: refund.paymentId });
+    const others = await manager.find(Refund, {
+      where: { paymentId: refund.paymentId, status: In(COMMITTED_REFUND_STATUSES) },
+    });
+    return this.refundableCents(payment, others.filter((r) => r.id !== refund.id)) >= toCents(refund.amount);
   }
 
   private refundableCents(payment: Payment, refunds: Refund[]): number {

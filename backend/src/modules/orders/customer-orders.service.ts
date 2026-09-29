@@ -7,14 +7,19 @@ import { QueryMyOrdersDto } from './dto/query-my-orders.dto.js';
 import { OrderItem } from './entities/order-item.entity.js';
 import { OrderStatusHistory } from './entities/order-status-history.entity.js';
 import { Order } from './entities/order.entity.js';
-import { type ActionAvailability, customerCancellation, paymentRetry, returnWindow } from './order-policies.js';
-import { AWAITING_PAYMENT_STATUSES, OrderStatus, PAID_STATUSES } from './order-status.js';
+import {
+  type ActionAvailability,
+  customerCancellation,
+  customerPaymentStatus,
+  paymentRetry,
+  returnWindow,
+} from './order-policies.js';
+import { AWAITING_PAYMENT_STATUSES, OrderStatus } from './order-status.js';
+import { ReplacementStatus } from './returns/entities/return-replacement.entity.js';
 import { ReturnRequest } from './returns/entities/return-request.entity.js';
+import { eligibleUnits } from './returns/return-eligibility.js';
 
 const PAGE_SIZE = 10;
-
-/** CU-13 (paso 3): estado de pago que ve el Cliente, derivado del estado del pedido. */
-export type CustomerPaymentStatus = 'pendiente' | 'aprobado' | 'rechazado' | 'sin_pago';
 
 /** Estados desde los que se muestran los datos de seguimiento (CU-13 paso 6). */
 const TRACKING_VISIBLE_STATUSES: readonly OrderStatus[] = [
@@ -81,7 +86,7 @@ export class CustomerOrdersService {
         itemCount: itemCounts.get(order.id) ?? 0,
         total: order.total,
         status: order.status,
-        paymentStatus: this.paymentStatus(order),
+        paymentStatus: customerPaymentStatus(order),
       })),
       page,
       pageSize: PAGE_SIZE,
@@ -106,12 +111,12 @@ export class CustomerOrdersService {
       this.ledger.findByOrder(orderId),
       this.returnRequestRepo.find({
         where: { orderId },
-        relations: { items: true, photos: true },
+        relations: { items: true, photos: true, replacements: true },
         order: { createdAt: 'ASC' },
       }),
     ]);
 
-    const requestedItemIds = new Set(returnRequests.flatMap((r) => r.items.map((i) => i.orderItemId)));
+    const eligible = new Map(order.items.map((i) => [i.id, eligibleUnits(i.id, i.quantity, returnRequests)]));
     const now = new Date();
     const items = [...order.items].sort((a, b) => a.productNameSnapshot.localeCompare(b.productNameSnapshot));
     const showTracking = TRACKING_VISIBLE_STATUSES.includes(order.status);
@@ -143,10 +148,11 @@ export class CustomerOrdersService {
         quantity: item.quantity,
         unitPrice: item.unitPriceSnapshot,
         subtotal: item.subtotal,
-        hasReturnRequest: requestedItemIds.has(item.id),
+        // CU-15 (paso 3): unidades que todavía se pueden pedir.
+        eligibleReturnQuantity: eligible.get(item.id) ?? 0,
       })),
       payment: {
-        status: this.paymentStatus(order),
+        status: customerPaymentStatus(order),
         // CU-13 (flujo 6a): mientras espera el pago, lo mostrado es el
         // último estado conocido; la actualización firme llega por CU-05.
         mayBeOutdated: AWAITING_PAYMENT_STATUSES.includes(order.status),
@@ -174,6 +180,15 @@ export class CustomerOrdersService {
         resolvedAt: request.resolvedAt,
         resolutionNote: request.resolutionNote,
         photos: request.photos.map((photo) => photo.url),
+        approvedAt: request.approvedAt,
+        // CU-22 (flujo 10a): la reposición de un cambio, con su seguimiento.
+        replacements: request.replacements.map((r) => ({
+          productName: r.productNameSnapshot,
+          variantAttributes: r.variantAttributesSnapshot,
+          quantity: r.quantity,
+          status: r.status,
+          tracking: r.status === ReplacementStatus.DESPACHADO ? { carrier: r.trackingCarrier, number: r.trackingNumber, dispatchedAt: r.dispatchedAt } : null,
+        })),
         items: request.items.map((ri) => {
           const item = order.items.find((i) => i.id === ri.orderItemId);
           return {
@@ -181,6 +196,7 @@ export class CustomerOrdersService {
             productName: item?.productNameSnapshot ?? '',
             quantityRequested: ri.quantityRequested,
             quantityApproved: ri.quantityApproved,
+            quantityReceived: ri.quantityReceived,
           };
         }),
       })),
@@ -188,16 +204,16 @@ export class CustomerOrdersService {
       actions: {
         retryPayment: paymentRetry(order, now),
         cancel: customerCancellation(order, now),
-        requestReturn: this.returnAvailability(order, requestedItemIds, now),
+        requestReturn: this.returnAvailability(order, eligible, now),
       },
     };
   }
 
   /** CU-15 (paso 2 + flujo 3a): ventana de posventa y al menos un ítem elegible. */
-  private returnAvailability(order: Order, requestedItemIds: Set<string>, now: Date): ActionAvailability {
+  private returnAvailability(order: Order, eligible: Map<string, number>, now: Date): ActionAvailability {
     const window = returnWindow(order, now);
     if (!window.allowed) return window;
-    if (order.items.every((item) => requestedItemIds.has(item.id))) {
+    if (order.items.every((item) => (eligible.get(item.id) ?? 0) === 0)) {
       return {
         allowed: false,
         code: 'NO_ELIGIBLE_ITEMS',
@@ -205,17 +221,6 @@ export class CustomerOrdersService {
       };
     }
     return window;
-  }
-
-  /**
-   * CU-13 (paso 3): pendiente / aprobado / rechazado, más "sin pago" para
-   * un pedido que se canceló sin haberse pagado.
-   */
-  private paymentStatus(order: Order): CustomerPaymentStatus {
-    if (order.status === OrderStatus.PAGO_RECHAZADO) return 'rechazado';
-    if (AWAITING_PAYMENT_STATUSES.includes(order.status)) return 'pendiente';
-    if (PAID_STATUSES.includes(order.status) || order.paidAt) return 'aprobado';
-    return 'sin_pago';
   }
 
   /** CU-13 (paso 6): medio de pago del pago acreditado o, si no hay, del último informado. */

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, NotFoundException, Param, Post } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SettlePaymentDto, SimulatePaymentDto } from './dto/simulate-payment.dto.js';
+import { SettlePaymentDto, SettleRefundDto, SimulatePaymentDto } from './dto/simulate-payment.dto.js';
 import { FakePaymentGateway } from './gateway/fake-payment.gateway.js';
 import { signWebhook } from './gateway/webhook-signature.js';
 import { PaymentsService } from './payments.service.js';
@@ -58,6 +58,24 @@ export class FakePaymentController {
     const payment = this.fakeGateway.settlePayment(paymentId, dto.outcome);
     await this.notify(payment.id);
     return { paymentId: payment.id, orderId: payment.orderId, status: payment.status };
+  }
+
+  /** Si la pasarela simulada está activa: el panel admin muestra sus botones sólo en ese caso. */
+  @Get('status')
+  status() {
+    return { enabled: this.enabled };
+  }
+
+  /**
+   * Lo que haría MercadoPago más tarde con un reembolso (CU-21 pasos 7-9):
+   * acreditarlo o rechazarlo, y avisarlo por el webhook del pago.
+   */
+  @Post('refunds/:refundId/settle')
+  async settleRefund(@Param('refundId') refundId: string, @Body() dto: SettleRefundDto) {
+    this.assertEnabled();
+    const refund = this.fakeGateway.settleRefund(refundId, dto.outcome);
+    await this.notify(refund.paymentId);
+    return { refundId: refund.id, status: refund.status };
   }
 
   private notify(paymentId: string) {

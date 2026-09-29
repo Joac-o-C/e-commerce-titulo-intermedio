@@ -232,7 +232,6 @@ export class CheckoutService {
           reservationExpiresAt: new Date(Date.now() + this.reservationTtlHours * 60 * 60 * 1000),
           cancellationCause: null,
           paymentPreferenceId: null,
-          internalNotes: null,
           trackingCarrier: null,
           trackingNumber: null,
           dispatchedAt: null,
@@ -318,7 +317,7 @@ export class CheckoutService {
       const problems: CheckoutProblem[] = [];
       for (const item of order.items) {
         const product = catalog.get(item.productId);
-        if (!isPurchasable(product)) {
+        if (!product || !isPurchasable(product)) {
           problems.push({ type: 'unavailable', productName: item.productNameSnapshot });
         } else if (toCents(product.price) !== toCents(item.unitPriceSnapshot)) {
           problems.push({

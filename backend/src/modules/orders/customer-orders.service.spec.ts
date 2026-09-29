@@ -29,7 +29,6 @@ describe('CustomerOrdersService', () => {
     trackingCarrier: 'Andreani',
     trackingNumber: 'AR123',
     dispatchedAt: null,
-    internalNotes: 'Faltante de stock',
     items: [{ id: 'item-1', productNameSnapshot: 'Remera', quantity: 2 }],
     ...overrides,
   });
@@ -74,13 +73,12 @@ describe('CustomerOrdersService', () => {
       await expect(service.getDetail('user-1', 'order-1')).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('6: muestra el medio del pago acreditado y nunca las notas internas del Administrador', async () => {
+    it('6: muestra el medio del pago acreditado', async () => {
       orderRepo.findOne.mockResolvedValue(order());
 
       const detail = await service.getDetail('user-1', 'order-1');
 
       expect(detail.payment).toEqual(expect.objectContaining({ status: 'aprobado', method: 'master', installments: 3 }));
-      expect(JSON.stringify(detail)).not.toContain('Faltante de stock');
     });
 
     it('6: el seguimiento sólo aparece desde "despachado"', async () => {

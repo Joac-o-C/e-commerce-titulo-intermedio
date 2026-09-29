@@ -349,6 +349,27 @@ export class ProductsService {
     return new Map(products.map((p) => [p.id, p]));
   }
 
+  /**
+   * CU-22 (flujo 10a): variantes entre las que el Administrador elige la
+   * reposición de un cambio — las del mismo producto, con su disponible.
+   * Sólo exige que el producto no esté dado de baja: despublicado se puede
+   * seguir reponiendo lo que ya se vendió.
+   */
+  async findReplacementOptions(productIds: string[]) {
+    if (productIds.length === 0) return new Map<string, { id: string; attributes: Record<string, string>; stockAvailable: number }[]>();
+    const variants = await this.variantRepo.find({
+      where: { productId: In(productIds), product: { isActive: true } },
+      order: { sku: 'ASC' },
+    });
+    const byProduct = new Map<string, { id: string; attributes: Record<string, string>; stockAvailable: number }[]>();
+    for (const v of variants) {
+      const list = byProduct.get(v.productId) ?? [];
+      list.push({ id: v.id, attributes: v.attributes, stockAvailable: v.stockTotal - v.stockReserved });
+      byProduct.set(v.productId, list);
+    }
+    return byProduct;
+  }
+
   /** `categoryIds` ya viene expandido a subcategorías (ver findPublished). */
   private buildPublicQuery(query: QueryProductsDto, categoryIds: string[] | undefined) {
     const qb = this.productRepo

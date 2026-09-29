@@ -12,3 +12,8 @@ export class SettlePaymentDto {
   @IsIn(['approved', 'rejected'])
   outcome: Exclude<SimulatedOutcome, 'pending'>;
 }
+
+export class SettleRefundDto {
+  @IsIn(['approved', 'rejected'])
+  outcome: 'approved' | 'rejected';
+}

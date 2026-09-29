@@ -1,4 +1,4 @@
-import { OrderStatus } from './order-status.js';
+import { AWAITING_PAYMENT_STATUSES, OrderStatus, PAID_STATUSES } from './order-status.js';
 
 /** CU-14 (precondición 4): horas desde la acreditación del pago en las que el Cliente puede cancelar solo. */
 export const CUSTOMER_CANCEL_WINDOW_HOURS = 24;
@@ -114,4 +114,43 @@ export function returnWindow(order: OrderLike, now: Date): ActionAvailability {
     };
   }
   return { allowed: true, deadline };
+}
+
+/** CU-13 (paso 3) y CU-19 (paso 2): estado de pago derivado del estado del pedido. */
+export type CustomerPaymentStatus = 'pendiente' | 'aprobado' | 'rechazado' | 'sin_pago';
+
+/** "Sin pago" = un pedido cancelado que nunca se pagó. */
+export function customerPaymentStatus(order: { status: OrderStatus; paidAt: Date | null }): CustomerPaymentStatus {
+  if (order.status === OrderStatus.PAGO_RECHAZADO) return 'rechazado';
+  if (AWAITING_PAYMENT_STATUSES.includes(order.status)) return 'pendiente';
+  if (PAID_STATUSES.includes(order.status) || order.paidAt) return 'aprobado';
+  return 'sin_pago';
+}
+
+/**
+ * CU-19 (paso 5, flujo 7a): transiciones que el Administrador aplica a mano.
+ * Los estados de pago los mueve sólo CU-05, "devuelto" sólo CU-22 y la
+ * cancelación tiene su propio flujo (5a).
+ */
+export const ADMIN_TRANSITIONS: Partial<Record<OrderStatus, readonly OrderStatus[]>> = {
+  [OrderStatus.PAGADO]: [OrderStatus.EN_PREPARACION],
+  [OrderStatus.EN_PREPARACION]: [OrderStatus.DESPACHADO],
+  [OrderStatus.DESPACHADO]: [OrderStatus.ENTREGADO],
+};
+
+/** CU-19 (flujo 5a): el Administrador cancela en cualquier estado salvo estos. */
+export const ADMIN_NON_CANCELLABLE_STATUSES: readonly OrderStatus[] = [
+  OrderStatus.ENTREGADO,
+  OrderStatus.CANCELADO,
+  OrderStatus.DEVUELTO,
+];
+
+/** CU-19 (paso 6, flujo 7b): datos de seguimiento, opcionales, cargables al despachar o después. */
+export const TRACKING_EDITABLE_STATUSES: readonly OrderStatus[] = [OrderStatus.DESPACHADO, OrderStatus.ENTREGADO];
+
+/** CU-22 (flujo 8a): días desde la aprobación para recibir el producto (decisión de la Fase 6). */
+export const RETURN_RECEPTION_DAYS = 10;
+
+export function receptionDeadline(approvedAt: Date): Date {
+  return new Date(approvedAt.getTime() + RETURN_RECEPTION_DAYS * 24 * 60 * 60 * 1000);
 }

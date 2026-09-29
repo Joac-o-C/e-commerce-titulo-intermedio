@@ -3,11 +3,13 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { ConfigService } from '@nestjs/config';
 import type {
   CreatePreferenceInput,
+  CreateRefundInput,
   CreatedPreference,
   GatewayPayment,
+  GatewayRefund,
   PaymentGateway,
 } from './payment-gateway.interface.js';
-import { PaymentNotFoundError } from './payment-gateway.interface.js';
+import { PaymentNotFoundError, RefundRejectedError } from './payment-gateway.interface.js';
 import { toCents } from '../../../common/money.js';
 
 export type SimulatedOutcome = 'approved' | 'rejected' | 'pending';
@@ -39,6 +41,9 @@ const RAW_STATUS: Record<SimulatedOutcome, { status: string; statusDetail: strin
 export class FakePaymentGateway implements PaymentGateway {
   private readonly preferences = new Map<string, FakePreference>();
   private readonly payments = new Map<string, GatewayPayment>();
+  private readonly refunds = new Map<string, GatewayRefund>();
+  /** Clave de idempotencia → id del reembolso ya creado con esa clave. */
+  private readonly refundKeys = new Map<string, string>();
   private readonly frontendUrl: string;
   private readonly currency: string;
 
@@ -67,6 +72,56 @@ export class FakePaymentGateway implements PaymentGateway {
   async expirePreference(preferenceId: string): Promise<void> {
     const preference = this.preferences.get(preferenceId);
     if (preference) preference.expiresAt = new Date();
+  }
+
+  /**
+   * Como MercadoPago: sólo sobre un pago aprobado y hasta su saldo sin
+   * reembolsar. Queda "in_process" hasta que se lo resuelva a mano desde la
+   * pasarela simulada (`settleRefund`), así se prueban 5a y 9a.
+   */
+  async createRefund(input: CreateRefundInput): Promise<GatewayRefund> {
+    const existing = this.refundKeys.get(input.idempotencyKey);
+    if (existing) return this.refunds.get(existing)!;
+
+    const payment = this.payments.get(input.paymentId);
+    if (!payment || payment.status !== 'approved') {
+      throw new RefundRejectedError(`El pago ${input.paymentId} no está aprobado en la pasarela simulada`);
+    }
+    const refundedCents = [...this.refunds.values()]
+      .filter((r) => r.paymentId === input.paymentId && r.status !== 'rejected')
+      .reduce((sum, r) => sum + toCents(r.amount), 0);
+    if (refundedCents + toCents(input.amount) > toCents(payment.amount)) {
+      throw new RefundRejectedError(`El reembolso supera el saldo del pago ${input.paymentId}`);
+    }
+
+    const id = `fake-refund-${randomUUID()}`;
+    const refund: GatewayRefund = {
+      id,
+      paymentId: input.paymentId,
+      status: 'in_process',
+      amount: input.amount,
+      raw: { simulated: true },
+    };
+    this.refunds.set(id, refund);
+    this.refundKeys.set(input.idempotencyKey, id);
+    return refund;
+  }
+
+  async getRefund(_paymentId: string, refundId: string): Promise<GatewayRefund> {
+    const refund = this.refunds.get(refundId);
+    if (!refund) throw new NotFoundException(`El reembolso ${refundId} no existe en la pasarela simulada`);
+    return refund;
+  }
+
+  /** Lo que haría MercadoPago más tarde: acreditar o rechazar el reembolso (CU-21 pasos 7-9). */
+  settleRefund(refundId: string, outcome: 'approved' | 'rejected'): GatewayRefund {
+    const refund = this.refunds.get(refundId);
+    if (!refund) throw new NotFoundException(`El reembolso ${refundId} no existe en la pasarela simulada (¿se reinició el backend?)`);
+    if (refund.status !== 'in_process') {
+      throw new ConflictException(`El reembolso ${refundId} ya está "${refund.status}"`);
+    }
+    refund.status = outcome;
+    return refund;
   }
 
   getPreference(preferenceId: string): FakePreference {
