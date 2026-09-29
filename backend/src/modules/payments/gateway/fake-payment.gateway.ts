@@ -124,6 +124,20 @@ export class FakePaymentGateway implements PaymentGateway {
     return refund;
   }
 
+  /**
+   * Pantalla "Pasarela simulada" del panel admin (decisión de la Fase 6):
+   * lo que en MercadoPago se resolvería solo más tarde — pagos pendientes
+   * (efectivo) y reembolsos en proceso —, para acreditarlo o rechazarlo.
+   */
+  listPending(): { payments: GatewayPayment[]; refunds: (GatewayRefund & { orderId: string | null })[] } {
+    return {
+      payments: [...this.payments.values()].filter((p) => p.status === RAW_STATUS.pending.status),
+      refunds: [...this.refunds.values()]
+        .filter((r) => r.status === 'in_process')
+        .map((r) => ({ ...r, orderId: this.payments.get(r.paymentId)?.orderId ?? null })),
+    };
+  }
+
   getPreference(preferenceId: string): FakePreference {
     const preference = this.preferences.get(preferenceId);
     if (!preference) throw new NotFoundException('La preferencia no existe (¿se reinició el backend?)');

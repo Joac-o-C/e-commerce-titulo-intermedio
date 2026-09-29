@@ -214,7 +214,10 @@ describe('Mis pedidos, cancelación y posventa (e2e)', () => {
     const movement = await movementRepo.findOneByOrFail({ variantId: variant.id, type: StockMovementType.CANCELACION });
     expect(movement.quantity).toBe(3);
     const refund = await refundRepo.findOneByOrFail({ orderId });
-    expect(refund).toEqual(expect.objectContaining({ originCu: RefundOrigin.CU_14, externalRefundId: null }));
+    // CU-21 (pasos 4-6): el reembolso ya se pidió a la pasarela y espera su confirmación.
+    expect(refund).toEqual(
+      expect.objectContaining({ originCu: RefundOrigin.CU_14, status: RefundStatus.EN_TRAMITE, externalRefundId: expect.any(String) }),
+    );
     expect(await emailLogRepo.countBy({ relatedOrderId: orderId, template: EmailTemplate.CANCELACION })).toBe(1);
 
     // Flujo 2a: ya cancelado, no se cancela de nuevo.
@@ -237,7 +240,7 @@ describe('Mis pedidos, cancelación y posventa (e2e)', () => {
     await pay(preferenceId, 'approved').expect(409);
   });
 
-  it('CU-15: sobre un pedido entregado crea la solicitud con fotos y no permite duplicarla', async () => {
+  it('CU-15: sobre un pedido entregado crea la solicitud con fotos y sólo admite otra por las unidades que quedan', async () => {
     const { orderId, preferenceId } = await checkout(2);
     await pay(preferenceId, 'approved').expect(201);
 
@@ -278,22 +281,43 @@ describe('Mis pedidos, cancelación y posventa (e2e)', () => {
     );
     expect(await emailLogRepo.countBy({ relatedOrderId: orderId, template: EmailTemplate.COMPROBANTE_POSVENTA })).toBe(1);
 
-    // El mismo ítem no admite otra solicitud. Como es el único del pedido,
-    // lo corta el flujo 3a (ningún ítem elegible) antes que el 6a.
-    const duplicate = await request(server())
+    // 6a: la unidad pedida sigue en una solicitud abierta; sólo queda 1 elegible.
+    const tooMany = await request(server())
+      .post(`/orders/${orderId}/returns`)
+      .set(auth())
+      .field('type', 'devolucion')
+      .field('reason', 'Otra vez')
+      .field('items', JSON.stringify([{ orderItemId: itemId, quantity: 2 }]))
+      .expect(409);
+    expect(tooMany.body).toEqual(
+      expect.objectContaining({ code: 'RETURN_ALREADY_REQUESTED', requestNumbers: [created.body.requestNumber], eligibleUnits: 1 }),
+    );
+
+    // La unidad que queda sí se puede pedir en otra solicitud.
+    const second = await request(server())
+      .post(`/orders/${orderId}/returns`)
+      .set(auth())
+      .field('type', 'devolucion')
+      .field('reason', 'La otra tampoco')
+      .field('items', JSON.stringify([{ orderItemId: itemId, quantity: 1 }]))
+      .expect(201);
+
+    // 3a: ya no quedan unidades elegibles.
+    const none = await request(server())
       .post(`/orders/${orderId}/returns`)
       .set(auth())
       .field('type', 'devolucion')
       .field('reason', 'Otra vez')
       .field('items', JSON.stringify([{ orderItemId: itemId, quantity: 1 }]))
       .expect(409);
-    expect(duplicate.body.code).toBe('NO_ELIGIBLE_ITEMS');
+    expect(none.body.code).toBe('NO_ELIGIBLE_ITEMS');
 
     const after = await detail(orderId);
     expect(after.returnRequests).toEqual([
       expect.objectContaining({ requestNumber: created.body.requestNumber, photos: [expect.stringContaining('/uploads/returns/')] }),
+      expect.objectContaining({ requestNumber: second.body.requestNumber, photos: [] }),
     ]);
-    // 3a: el único ítem ya tiene solicitud.
+    expect(after.items[0].eligibleReturnQuantity).toBe(0);
     expect(after.actions.requestReturn).toEqual(expect.objectContaining({ allowed: false, code: 'NO_ELIGIBLE_ITEMS' }));
     // Entregado: ya no se puede cancelar (2a).
     expect(after.actions.cancel.allowed).toBe(false);

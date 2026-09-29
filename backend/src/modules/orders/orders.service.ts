@@ -316,6 +316,13 @@ export class OrdersService {
       .then((orders) => orders.map((o) => o.id));
   }
 
+  /** Número visible de cada pedido (p. ej. para listar lo pendiente en la pasarela simulada). */
+  async findOrderNumbers(orderIds: string[]): Promise<Map<string, number>> {
+    if (orderIds.length === 0) return new Map();
+    const orders = await this.orderRepo.find({ select: { id: true, orderNumber: true }, where: { id: In(orderIds) } });
+    return new Map(orders.map((o) => [o.id, o.orderNumber]));
+  }
+
   findById(orderId: string): Promise<Order | null> {
     return this.orderRepo.findOne({ where: { id: orderId } });
   }

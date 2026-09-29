@@ -1,6 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
+import { RefundOrigin } from '../payments/entities/refund.entity.js';
 import { StockReservationService } from '../products/stock/stock-reservation.service.js';
 import { OrderNote } from './entities/order-note.entity.js';
 import { Order } from './entities/order.entity.js';
@@ -102,19 +103,19 @@ describe('OrdersService', () => {
       expect(o.items[0].stockCommitted).toBe(false);
     });
 
-    it('aprobado sobre un pedido ya pagado: no descuenta stock de nuevo y lo marca como discrepancia (doble cobro)', async () => {
+    it('aprobado sobre un pedido ya pagado: no descuenta stock de nuevo y pide el reembolso del doble cobro', async () => {
       const result = await service.applyPaymentOutcome(manager as never, order({ status: OrderStatus.PAGADO }), 'aprobado', 'pay-2');
 
-      expect(result).toEqual({ changed: false, discrepancy: expect.stringContaining('doble cobro') });
+      expect(result).toEqual({ changed: false, discrepancy: expect.stringContaining('doble cobro'), refundOrigin: RefundOrigin.CU_05 });
       expect(stock.confirmSale).not.toHaveBeenCalled();
     });
 
-    it('aprobado sobre un pedido cancelado a propósito (cliente/admin/pasarela): no lo revive, queda para reembolso', async () => {
+    it('aprobado sobre un pedido cancelado a propósito (cliente/admin/pasarela): no lo revive y pide el reembolso', async () => {
       const o = order({ status: OrderStatus.CANCELADO, cancellationCause: OrderCancellationCause.CLIENTE, stockReservationActive: false });
 
       const result = await service.applyPaymentOutcome(manager as never, o, 'aprobado', 'pay-1');
 
-      expect(result).toEqual({ changed: false, discrepancy: expect.stringContaining('requiere reembolso') });
+      expect(result).toEqual({ changed: false, discrepancy: expect.stringContaining('se reembolsa'), refundOrigin: RefundOrigin.CU_14 });
       expect(o.status).toBe(OrderStatus.CANCELADO);
       expect(stock.confirmSale).not.toHaveBeenCalled();
     });

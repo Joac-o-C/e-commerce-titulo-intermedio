@@ -14,6 +14,19 @@ export enum OrderStatus {
   DEVUELTO = 'devuelto',
 }
 
+/** Texto de las fichas de CU para cada estado (mismo que el frontend), p. ej. para el CSV de CU-19. */
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  [OrderStatus.PENDIENTE_PAGO]: 'Pendiente de pago',
+  [OrderStatus.PAGO_PENDIENTE_ACREDITACION]: 'Pago pendiente de acreditación',
+  [OrderStatus.PAGO_RECHAZADO]: 'Pago rechazado',
+  [OrderStatus.PAGADO]: 'Pagado',
+  [OrderStatus.EN_PREPARACION]: 'En preparación',
+  [OrderStatus.DESPACHADO]: 'Despachado',
+  [OrderStatus.ENTREGADO]: 'Entregado',
+  [OrderStatus.CANCELADO]: 'Cancelado',
+  [OrderStatus.DEVUELTO]: 'Devuelto',
+};
+
 /**
  * Por qué se canceló un pedido. Distingue el vencimiento de la reserva
  * (CU-03 18a) — el único caso en que un pago acreditado tarde puede

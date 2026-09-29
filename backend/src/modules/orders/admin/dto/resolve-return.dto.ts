@@ -35,6 +35,11 @@ export class QueryAdminReturnsDto {
   @IsOptional()
   @IsIn(['vencidas'])
   reception?: 'vencidas';
+
+  /** CU-22 (flujo 10a): cambios con la reposición todavía sin despachar. */
+  @IsOptional()
+  @IsIn(['pendientes'])
+  replacements?: 'pendientes';
 }
 
 export class ApprovedItemDto {

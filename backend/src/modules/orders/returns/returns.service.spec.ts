@@ -1,7 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
-import { QueryFailedError } from 'typeorm';
 import { STORAGE_SERVICE } from '../../../providers/storage/storage.interface.js';
 import { EmailTemplate } from '../../notifications/entities/email-log.entity.js';
 import { NotificationsService } from '../../notifications/notifications.service.js';
@@ -15,11 +14,22 @@ import { ReturnsService } from './returns.service.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 
+const request = (
+  requestNumber: number,
+  status: ReturnRequestStatus,
+  items: { orderItemId: string; quantityRequested: number; quantityApproved?: number; quantityReceived?: number }[],
+): Partial<ReturnRequest> =>
+  ({
+    requestNumber,
+    status,
+    items: items.map((i) => ({ quantityApproved: null, quantityReceived: null, ...i })),
+  }) as unknown as Partial<ReturnRequest>;
+
 describe('ReturnsService', () => {
   let service: ReturnsService;
   let order: Partial<Order> | null;
   let orderItems: Partial<OrderItem>[];
-  let previousRequests: Partial<ReturnRequestItem>[];
+  let previousRequests: Partial<ReturnRequest>[];
   let manager: Record<string, ReturnType<typeof vi.fn>>;
   let storage: { upload: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> };
   let notifications: { send: ReturnType<typeof vi.fn> };
@@ -60,7 +70,6 @@ describe('ReturnsService', () => {
           useValue: {
             manager,
             transaction: (cb: (m: unknown) => unknown) => cb(manager),
-            getRepository: () => ({ find: vi.fn().mockResolvedValue([{ returnRequest: { requestNumber: 11 } }]) }),
           },
         },
         { provide: STORAGE_SERVICE, useValue: storage },
@@ -115,10 +124,10 @@ describe('ReturnsService', () => {
       await expect(service.create('user-1', 'order-1', dto())).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('3a: si todos los ítems ya tienen solicitud, lo informa', async () => {
+    it('3a: si todas las unidades ya están pedidas o aprobadas, lo informa', async () => {
       previousRequests = [
-        { orderItemId: 'item-1', returnRequest: { requestNumber: 3 } as ReturnRequest },
-        { orderItemId: 'item-2', returnRequest: { requestNumber: 3 } as ReturnRequest },
+        request(3, ReturnRequestStatus.SOLICITADA, [{ orderItemId: 'item-1', quantityRequested: 2 }]),
+        request(4, ReturnRequestStatus.APROBADA, [{ orderItemId: 'item-2', quantityRequested: 1, quantityApproved: 1 }]),
       ];
 
       const error = await service.create('user-1', 'order-1', dto()).catch((e) => e);
@@ -140,17 +149,37 @@ describe('ReturnsService', () => {
       );
     });
 
-    it('6a: un ítem con una solicitud previa muestra la existente y no duplica', async () => {
-      previousRequests = [{ orderItemId: 'item-1', returnRequest: { requestNumber: 3 } as ReturnRequest }];
+    it('6a: unidades ya pedidas en una solicitud abierta: informa cuántas quedan y cuál la tiene', async () => {
+      previousRequests = [request(3, ReturnRequestStatus.SOLICITADA, [{ orderItemId: 'item-1', quantityRequested: 1 }])];
 
-      const error = await service.create('user-1', 'order-1', dto()).catch((e) => e);
-      expect(error.getResponse()).toEqual(expect.objectContaining({ code: 'RETURN_ALREADY_REQUESTED', requestNumbers: [3] }));
+      const error = await service.create('user-1', 'order-1', dto([{ orderItemId: 'item-1', quantity: 2 }])).catch((e) => e);
+      expect(error.getResponse()).toEqual(
+        expect.objectContaining({ code: 'RETURN_ALREADY_REQUESTED', requestNumbers: [3], eligibleUnits: 1 }),
+      );
       expect(storage.upload).not.toHaveBeenCalled();
     });
 
-    it('6a: si otra solicitud en paralelo gana la UNIQUE, borra las fotos subidas y muestra la existente', async () => {
-      manager.save.mockImplementationOnce(() => {
-        throw new QueryFailedError('INSERT', [], Object.assign(new Error('dup'), { code: '23505' }));
+    it('6a: las unidades rechazadas, o aprobadas y no recibidas, se pueden volver a pedir', async () => {
+      previousRequests = [
+        request(3, ReturnRequestStatus.RECHAZADA, [{ orderItemId: 'item-1', quantityRequested: 2 }]),
+        request(4, ReturnRequestStatus.RESUELTA, [
+          { orderItemId: 'item-1', quantityRequested: 2, quantityApproved: 2, quantityReceived: 1 },
+        ]),
+      ];
+
+      const result = await service.create('user-1', 'order-1', dto([{ orderItemId: 'item-1', quantity: 1 }]));
+      expect(result.requestNumber).toBe(12);
+    });
+
+    it('6a: si otra solicitud en paralelo tomó las unidades (vista con el lock del pedido), borra las fotos subidas', async () => {
+      // Sin lock no había nada; dentro de la transacción ya está la otra.
+      let calls = 0;
+      manager.find.mockImplementation((entity) => {
+        if (entity === OrderItem) return Promise.resolve(orderItems);
+        calls += 1;
+        return Promise.resolve(
+          calls === 1 ? [] : [request(11, ReturnRequestStatus.SOLICITADA, [{ orderItemId: 'item-1', quantityRequested: 2 }])],
+        );
       });
 
       const error = await service.create('user-1', 'order-1', dto(), [photo]).catch((e) => e);
@@ -158,7 +187,7 @@ describe('ReturnsService', () => {
       expect(storage.remove).toHaveBeenCalledWith('http://x/uploads/returns/foto.jpg');
       expect(notifications.send).not.toHaveBeenCalled();
     });
-  
+
     it('8a: si falla el aviso después del commit, la solicitud queda creada y conserva sus fotos', async () => {
       notifications.send.mockRejectedValue(new Error('EmailLog caído'));
 

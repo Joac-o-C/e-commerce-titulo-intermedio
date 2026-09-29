@@ -119,6 +119,13 @@ export function returnWindow(order: OrderLike, now: Date): ActionAvailability {
 /** CU-13 (paso 3) y CU-19 (paso 2): estado de pago derivado del estado del pedido. */
 export type CustomerPaymentStatus = 'pendiente' | 'aprobado' | 'rechazado' | 'sin_pago';
 
+export const PAYMENT_STATUS_LABELS: Record<CustomerPaymentStatus, string> = {
+  pendiente: 'Pendiente',
+  aprobado: 'Aprobado',
+  rechazado: 'Rechazado',
+  sin_pago: 'Sin pago',
+};
+
 /** "Sin pago" = un pedido cancelado que nunca se pagó. */
 export function customerPaymentStatus(order: { status: OrderStatus; paidAt: Date | null }): CustomerPaymentStatus {
   if (order.status === OrderStatus.PAGO_RECHAZADO) return 'rechazado';

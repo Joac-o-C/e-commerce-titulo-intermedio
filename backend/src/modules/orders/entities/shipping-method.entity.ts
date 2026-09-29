@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 /**
  * Método de envío (CU-03 pasos 7-9). La ficha fija que "el costo de envío
@@ -6,13 +6,20 @@ import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateCol
  * de la dirección, así que todos los métodos activos están disponibles
  * para cualquier dirección. No estaba en el modelo de datos original del
  * plan; se agregó al arrancar la Fase 4 (decisión con el usuario), con
- * métodos sembrados por migración y sin ABM admin todavía.
+ * métodos sembrados por migración. El ABM admin llegó en la Fase 6
+ * (alcance extra pedido por el usuario).
  */
 @Entity('shipping_methods')
 export class ShippingMethod {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  /**
+   * Único sin distinguir mayúsculas (decisión de la Fase 6). El índice es
+   * sobre `lower(name)`, que TypeORM no sabe declarar: se crea a mano en la
+   * migración y `synchronize: false` evita que `migration:generate` lo borre.
+   */
+  @Index('UX_shipping_methods_name_lower', { synchronize: false })
   @Column()
   name: string;
 

@@ -286,9 +286,18 @@ export function OrderDetail() {
                   Solicitud #{request.requestNumber} · {request.type === 'cambio' ? 'Cambio' : 'Devolución'} ·{' '}
                   {RETURN_STATUS_LABELS[request.status]}
                 </p>
-                <p className="text-neutral-600">
-                  {request.items.map((i) => `${i.productName} ×${i.quantityRequested}`).join(', ')}
-                </p>
+                <ul className="text-neutral-600">
+                  {request.items.map((i) => (
+                    <li key={i.orderItemId}>
+                      {i.productName} ×{i.quantityRequested}
+                      {/* CU-22 (paso 5, flujo 4a): aprobación parcial y lo recibido. */}
+                      {i.quantityApproved !== null && i.quantityApproved !== i.quantityRequested && (
+                        <span className="text-neutral-500"> · aprobadas {i.quantityApproved}</span>
+                      )}
+                      {i.quantityReceived !== null && <span className="text-neutral-500"> · recibidas {i.quantityReceived}</span>}
+                    </li>
+                  ))}
+                </ul>
                 <p className="text-neutral-500">Motivo: {request.reason}</p>
                 {request.photos.length > 0 && (
                   <div className="mt-2 flex gap-2">
@@ -300,6 +309,19 @@ export function OrderDetail() {
                   </div>
                 )}
                 {request.resolutionNote && <p className="text-neutral-600">Respuesta: {request.resolutionNote}</p>}
+                {/* CU-22 (flujo 10a): la reposición del cambio, con su seguimiento. */}
+                {request.replacements.map((r, index) => (
+                  <p key={index} className="text-neutral-600">
+                    Reposición: {r.productName}
+                    {Object.keys(r.variantAttributes).length > 0 && ` (${Object.values(r.variantAttributes).join(' / ')})`} ×
+                    {r.quantity} ·{' '}
+                    {r.status === 'despachado'
+                      ? `despachada${r.tracking?.carrier ? ` por ${r.tracking.carrier}` : ''}${
+                          r.tracking?.number ? `, seguimiento ${r.tracking.number}` : ''
+                        }`
+                      : 'pendiente de despacho'}
+                  </p>
+                ))}
               </li>
             ))}
           </ul>

@@ -2,18 +2,14 @@ import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { OrderStatusBadge } from '../../features/orders/components/OrderStatusBadge'
 import { useMyOrders } from '../../features/orders/hooks/useMyOrders'
-import { ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS, formatDate } from '../../features/orders/order-labels'
+import {
+  MAX_ORDER_NUMBER,
+  ORDER_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
+  dayBoundary,
+  formatDate,
+} from '../../features/orders/order-labels'
 import type { OrderListFilters, OrderStatus } from '../../types/order.types'
-
-/** Tope de la columna `order_number` (int4). */
-const MAX_ORDER_NUMBER = 2147483647
-
-/** Día elegido en un `<input type="date">` → instante ISO de su comienzo o fin, en la zona del Cliente. */
-function dayBoundary(day: string, edge: 'start' | 'end'): string {
-  const [y, m, d] = day.split('-').map(Number)
-  const date = edge === 'start' ? new Date(y, m - 1, d, 0, 0, 0, 0) : new Date(y, m - 1, d, 23, 59, 59, 999)
-  return date.toISOString()
-}
 
 /**
  * CU-13 Ver mis pedidos (listado). Los filtros viven en la URL para que

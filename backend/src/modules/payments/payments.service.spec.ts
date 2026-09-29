@@ -14,7 +14,9 @@ import {
   PaymentNotFoundError,
 } from './gateway/payment-gateway.interface.js';
 import { signWebhook } from './gateway/webhook-signature.js';
+import { PaymentLedgerService } from './ledger/payment-ledger.service.js';
 import { PaymentsService } from './payments.service.js';
+import { RefundsService } from './refunds/refunds.service.js';
 
 const SECRET = 'secreto-de-test';
 const ORDER_ID = '0b6a4b1e-3c55-4c4e-9f7e-2a7d0d1f6a11';
@@ -39,6 +41,8 @@ describe('PaymentsService', () => {
   let auditRepo: { save: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
   let ordersService: Record<string, ReturnType<typeof vi.fn>>;
   let notifications: { send: ReturnType<typeof vi.fn> };
+  let ledger: { requestRefund: ReturnType<typeof vi.fn> };
+  let refunds: { dispatch: ReturnType<typeof vi.fn>; reconcilePayment: ReturnType<typeof vi.fn> };
   const lockedOrder = { id: ORDER_ID, userId: 'user-1', total: '700.00', status: 'pagado', items: [] };
 
   const auditedEvents = () => auditRepo.create.mock.calls.map(([data]) => data.eventType);
@@ -59,6 +63,8 @@ describe('PaymentsService', () => {
     };
     notifications = { send: vi.fn() };
 
+    ledger = { requestRefund: vi.fn().mockResolvedValue({ id: 'refund-1' }) };
+    refunds = { dispatch: vi.fn().mockResolvedValue(undefined), reconcilePayment: vi.fn().mockResolvedValue(undefined) };
     const moduleRef = await Test.createTestingModule({
       providers: [
         PaymentsService,
@@ -68,6 +74,8 @@ describe('PaymentsService', () => {
         { provide: OrdersService, useValue: ordersService },
         { provide: UsersService, useValue: { findById: vi.fn().mockResolvedValue({ email: 'c@example.com' }) } },
         { provide: NotificationsService, useValue: notifications },
+        { provide: PaymentLedgerService, useValue: ledger },
+        { provide: RefundsService, useValue: refunds },
         {
           provide: ConfigService,
           useValue: { get: (key: string) => ({ PAYMENT_WEBHOOK_SECRET: SECRET, PAYMENT_CURRENCY: 'ARS' })[key] },

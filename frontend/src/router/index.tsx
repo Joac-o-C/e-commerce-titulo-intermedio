@@ -17,6 +17,12 @@ import { SimulatedPayment } from '../pages/checkout/SimulatedPayment'
 import { AdminCategories } from '../pages/admin/Categories'
 import { AdminProducts } from '../pages/admin/Products'
 import { AdminStock } from '../pages/admin/Stock'
+import { AdminOrders } from '../pages/admin/Orders'
+import { AdminOrderDetail } from '../pages/admin/OrderDetail'
+import { AdminReturns } from '../pages/admin/Returns'
+import { AdminReturnDetail } from '../pages/admin/ReturnDetail'
+import { AdminShippingMethods } from '../pages/admin/ShippingMethods'
+import { AdminFakeGateway } from '../pages/admin/FakeGateway'
 import { ProtectedRoute } from '../components/auth/ProtectedRoute'
 import { AdminRoute } from '../components/auth/AdminRoute'
 import { Layout } from '../components/layout/Layout'
@@ -62,6 +68,13 @@ export const router = createBrowserRouter([
           { path: '/admin/categories', element: <AdminCategories /> },
           { path: '/admin/products', element: <AdminProducts /> },
           { path: '/admin/stock', element: <AdminStock /> },
+          // Fase 6: CU-19, CU-21 (gestión de reembolsos), CU-22 y ABM de envíos.
+          { path: '/admin/orders', element: <AdminOrders /> },
+          { path: '/admin/orders/:id', element: <AdminOrderDetail /> },
+          { path: '/admin/returns', element: <AdminReturns /> },
+          { path: '/admin/returns/:id', element: <AdminReturnDetail /> },
+          { path: '/admin/shipping-methods', element: <AdminShippingMethods /> },
+          { path: '/admin/fake-gateway', element: <AdminFakeGateway /> },
         ],
       },
     ],

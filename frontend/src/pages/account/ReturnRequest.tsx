@@ -84,8 +84,8 @@ export function ReturnRequest() {
     )
   }
 
-  // CU-15 (paso 3): sólo los ítems sin solicitud previa.
-  const eligible = order.items.filter((item) => !item.hasReturnRequest)
+  // CU-15 (paso 3): sólo los ítems con unidades que todavía se pueden pedir.
+  const eligible = order.items.filter((item) => item.eligibleReturnQuantity > 0)
   const deadline = order.actions.requestReturn.deadline
 
   const onPhotosChange = (input: HTMLInputElement) => {
@@ -136,14 +136,19 @@ export function ReturnRequest() {
             <label key={item.id} className="flex items-center justify-between gap-4">
               <span>
                 {item.productName}
-                <span className="text-neutral-500"> (compraste {item.quantity})</span>
+                <span className="text-neutral-500">
+                  {' '}
+                  {item.eligibleReturnQuantity === item.quantity
+                    ? `(compraste ${item.quantity})`
+                    : `(podés pedir ${item.eligibleReturnQuantity} de ${item.quantity}; el resto ya está en otra solicitud)`}
+                </span>
               </span>
               <select
                 value={quantities[item.id] ?? 0}
                 onChange={(e) => setQuantities({ ...quantities, [item.id]: Number(e.target.value) })}
                 className="rounded border border-neutral-300 px-2 py-1"
               >
-                {Array.from({ length: item.quantity + 1 }, (_, n) => (
+                {Array.from({ length: item.eligibleReturnQuantity + 1 }, (_, n) => (
                   <option key={n} value={n}>
                     {n === 0 ? 'Ninguno' : n}
                   </option>
@@ -152,7 +157,9 @@ export function ReturnRequest() {
             </label>
           ))}
           {eligible.length < order.items.length && (
-            <p className="text-xs text-neutral-500">Los productos que ya tienen una solicitud no aparecen en la lista.</p>
+            <p className="text-xs text-neutral-500">
+              Los productos cuyas unidades ya están todas en una solicitud no aparecen en la lista.
+            </p>
           )}
         </fieldset>
 

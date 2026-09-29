@@ -6,6 +6,7 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { RefundOrigin } from '../payments/entities/refund.entity.js';
 import { PAYMENT_GATEWAY } from '../payments/gateway/payment-gateway.interface.js';
 import { PaymentLedgerService } from '../payments/ledger/payment-ledger.service.js';
+import { RefundsService } from '../payments/refunds/refunds.service.js';
 import { UsersService } from '../users/users.service.js';
 import type { Order } from './entities/order.entity.js';
 import { OrderCancellationService } from './order-cancellation.service.js';
@@ -32,6 +33,7 @@ describe('OrderCancellationService', () => {
   let ledger: { requestRefund: ReturnType<typeof vi.fn> };
   let gateway: { expirePreference: ReturnType<typeof vi.fn> };
   let notifications: { send: ReturnType<typeof vi.fn> };
+  let refunds: { dispatch: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     ordersService = {
@@ -47,6 +49,7 @@ describe('OrderCancellationService', () => {
     gateway = { expirePreference: vi.fn().mockResolvedValue(undefined) };
     notifications = { send: vi.fn() };
 
+    refunds = { dispatch: vi.fn().mockResolvedValue(undefined) };
     const moduleRef = await Test.createTestingModule({
       providers: [
         OrderCancellationService,
@@ -55,6 +58,7 @@ describe('OrderCancellationService', () => {
         { provide: OrdersService, useValue: ordersService },
         { provide: PaymentLedgerService, useValue: ledger },
         { provide: NotificationsService, useValue: notifications },
+        { provide: RefundsService, useValue: refunds },
         { provide: UsersService, useValue: { findById: vi.fn().mockResolvedValue({ id: 'user-1', email: 'c@example.com' }) } },
       ],
     }).compile();

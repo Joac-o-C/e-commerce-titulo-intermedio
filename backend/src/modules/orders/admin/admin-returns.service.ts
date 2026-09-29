@@ -43,6 +43,8 @@ export class AdminReturnsService {
   constructor(
     @InjectRepository(ReturnRequest)
     private readonly requestRepo: Repository<ReturnRequest>,
+    @InjectRepository(ReturnReplacement)
+    private readonly replacementRepo: Repository<ReturnReplacement>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly ordersService: OrdersService,
@@ -62,8 +64,7 @@ export class AdminReturnsService {
    */
   async list(query: QueryAdminReturnsDto) {
     const page = query.page ?? 1;
-    // Aprobadas antes de esta fecha ya vencieron su plazo de recepción (8a).
-    const overdueBefore = new Date(Date.now() - RETURN_RECEPTION_DAYS * 24 * 60 * 60 * 1000);
+    const overdueBefore = this.overdueBefore();
     const qb = this.requestRepo
       .createQueryBuilder('r')
       .innerJoinAndSelect('r.order', 'o')
@@ -78,21 +79,18 @@ export class AdminReturnsService {
         overdueBefore,
       });
     }
+    if (query.replacements === 'pendientes') {
+      qb.andWhere(
+        'EXISTS (SELECT 1 FROM return_replacements rr WHERE rr.return_request_id = r.id AND rr.status = :pendingReplacement)',
+        { pendingReplacement: ReplacementStatus.PENDIENTE_DESPACHO },
+      );
+    }
     const [requests, total] = await qb
       .skip((page - 1) * PAGE_SIZE)
       .take(PAGE_SIZE)
       .getManyAndCount();
 
-    const [pending, overdue] = await Promise.all([
-      this.requestRepo.count({ where: { status: ReturnRequestStatus.SOLICITADA } }),
-      this.requestRepo
-        .createQueryBuilder('r')
-        .where('r.status = :approved AND r.approvedAt < :overdueBefore', {
-          approved: ReturnRequestStatus.APROBADA,
-          overdueBefore,
-        })
-        .getCount(),
-    ]);
+    const { pending, overdue } = await this.counters();
 
     return {
       items: requests.map((r) => ({
@@ -112,6 +110,31 @@ export class AdminReturnsService {
       totalPages: Math.ceil(total / PAGE_SIZE),
       counters: { pending, overdue },
     };
+  }
+
+  /**
+   * Contadores de la barra de admin (decisión de la Fase 6): solicitudes
+   * por resolver, aprobadas con el plazo de recepción vencido (8a) y
+   * reposiciones de cambios pendientes de despacho (10a).
+   */
+  async counters(): Promise<{ pending: number; overdue: number; replacementsPending: number }> {
+    const [pending, overdue, replacementsPending] = await Promise.all([
+      this.requestRepo.count({ where: { status: ReturnRequestStatus.SOLICITADA } }),
+      this.requestRepo
+        .createQueryBuilder('r')
+        .where('r.status = :approved AND r.approvedAt < :overdueBefore', {
+          approved: ReturnRequestStatus.APROBADA,
+          overdueBefore: this.overdueBefore(),
+        })
+        .getCount(),
+      this.replacementRepo.count({ where: { status: ReplacementStatus.PENDIENTE_DESPACHO } }),
+    ]);
+    return { pending, overdue, replacementsPending };
+  }
+
+  /** Aprobadas antes de esta fecha ya vencieron su plazo de recepción (8a). */
+  private overdueBefore(): Date {
+    return new Date(Date.now() - RETURN_RECEPTION_DAYS * 24 * 60 * 60 * 1000);
   }
 
   /**

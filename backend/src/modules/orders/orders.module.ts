@@ -12,6 +12,9 @@ import { AdminOrdersController } from './admin/admin-orders.controller.js';
 import { AdminOrdersService } from './admin/admin-orders.service.js';
 import { AdminReturnsController } from './admin/admin-returns.controller.js';
 import { AdminReturnsService } from './admin/admin-returns.service.js';
+import { AdminShippingMethodsController } from './admin/admin-shipping-methods.controller.js';
+import { AdminShippingMethodsService } from './admin/admin-shipping-methods.service.js';
+import { AdminSummaryController } from './admin/admin-summary.controller.js';
 import { CheckoutController } from './checkout.controller.js';
 import { CheckoutService } from './checkout.service.js';
 import { CustomerOrdersService } from './customer-orders.service.js';
@@ -55,7 +58,15 @@ import { ReturnsService } from './returns/returns.service.js';
     // Mismo motivo que en el resto de los módulos: habilita JwtAuthGuard.
     PassportModule.register({ defaultStrategy: 'jwt' }),
   ],
-  controllers: [CheckoutController, OrdersController, ReturnsController, AdminOrdersController, AdminReturnsController],
+  controllers: [
+    CheckoutController,
+    OrdersController,
+    ReturnsController,
+    AdminOrdersController,
+    AdminReturnsController,
+    AdminShippingMethodsController,
+    AdminSummaryController,
+  ],
   providers: [
     OrdersService,
     CheckoutService,
@@ -64,6 +75,7 @@ import { ReturnsService } from './returns/returns.service.js';
     ReturnsService,
     AdminOrdersService,
     AdminReturnsService,
+    AdminShippingMethodsService,
   ],
   // `payments` aplica el resultado de cada pago sobre el pedido (CU-05) y
   // devuelve el detalle del pedido al volver de la pasarela.

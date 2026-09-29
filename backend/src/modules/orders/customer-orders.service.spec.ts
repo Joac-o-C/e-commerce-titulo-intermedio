@@ -8,7 +8,7 @@ import { OrderItem } from './entities/order-item.entity.js';
 import { OrderStatusHistory } from './entities/order-status-history.entity.js';
 import { Order } from './entities/order.entity.js';
 import { OrderStatus } from './order-status.js';
-import { ReturnRequest } from './returns/entities/return-request.entity.js';
+import { ReturnRequest, ReturnRequestStatus } from './returns/entities/return-request.entity.js';
 
 const HOUR = 60 * 60 * 1000;
 
@@ -101,16 +101,40 @@ describe('CustomerOrdersService', () => {
       expect(actions.requestReturn.allowed).toBe(false);
     });
 
-    it('7a: un pedido entregado cuyos ítems ya tienen solicitud no ofrece posventa', async () => {
+    it('7a: un pedido entregado cuyas unidades ya están todas pedidas no ofrece posventa', async () => {
       orderRepo.findOne.mockResolvedValue(order({ status: OrderStatus.ENTREGADO, deliveredAt: new Date() }));
       returnRequestRepo.find.mockResolvedValue([
-        { items: [{ orderItemId: 'item-1', quantityRequested: 1 }], photos: [], requestNumber: 3 },
+        {
+          status: ReturnRequestStatus.SOLICITADA,
+          items: [{ orderItemId: 'item-1', quantityRequested: 2, quantityApproved: null, quantityReceived: null }],
+          photos: [],
+          replacements: [],
+          requestNumber: 3,
+        },
       ]);
 
       const detail = await service.getDetail('user-1', 'order-1');
 
       expect(detail.actions.requestReturn).toEqual(expect.objectContaining({ allowed: false, code: 'NO_ELIGIBLE_ITEMS' }));
-      expect(detail.items[0].hasReturnRequest).toBe(true);
+      expect(detail.items[0].eligibleReturnQuantity).toBe(0);
+    });
+
+    it('7a: con unidades sin pedir (o no aprobadas) sigue ofreciendo posventa por esas unidades', async () => {
+      orderRepo.findOne.mockResolvedValue(order({ status: OrderStatus.ENTREGADO, deliveredAt: new Date() }));
+      returnRequestRepo.find.mockResolvedValue([
+        {
+          status: ReturnRequestStatus.APROBADA,
+          items: [{ orderItemId: 'item-1', quantityRequested: 2, quantityApproved: 1, quantityReceived: null }],
+          photos: [],
+          replacements: [],
+          requestNumber: 3,
+        },
+      ]);
+
+      const detail = await service.getDetail('user-1', 'order-1');
+
+      expect(detail.actions.requestReturn.allowed).toBe(true);
+      expect(detail.items[0].eligibleReturnQuantity).toBe(1);
     });
 
     it('6a: mientras espera el pago, marca el estado de pago como posiblemente desactualizado', async () => {

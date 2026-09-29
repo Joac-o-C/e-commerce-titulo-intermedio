@@ -2,6 +2,7 @@ import { Link, Outlet } from 'react-router-dom'
 import { useCart } from '../../features/cart/hooks/useCart'
 import { useGuestCartStore } from '../../store/cart.store'
 import { useAuthStore } from '../../store/auth.store'
+import { AdminBar } from './AdminBar'
 
 /**
  * Header compartido por toda la SPA (no existía antes de Fase 3: hasta
@@ -11,6 +12,7 @@ import { useAuthStore } from '../../store/auth.store'
  */
 export function Layout() {
   const authStatus = useAuthStore((s) => s.status)
+  const isAdmin = useAuthStore((s) => s.user?.role === 'administrador')
   const { data: cart } = useCart()
   const guestItems = useGuestCartStore((s) => s.items)
 
@@ -49,6 +51,7 @@ export function Layout() {
             </Link>
           </nav>
         </div>
+        {isAdmin && <AdminBar />}
       </header>
       <Outlet />
     </div>

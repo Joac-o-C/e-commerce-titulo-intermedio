@@ -15,10 +15,17 @@ import { OrderCancellationService } from '../order-cancellation.service.js';
 import {
   ADMIN_NON_CANCELLABLE_STATUSES,
   ADMIN_TRANSITIONS,
+  PAYMENT_STATUS_LABELS,
   TRACKING_EDITABLE_STATUSES,
   customerPaymentStatus,
 } from '../order-policies.js';
-import { AWAITING_PAYMENT_STATUSES, OrderCancellationCause, OrderStatus, PAID_STATUSES } from '../order-status.js';
+import {
+  AWAITING_PAYMENT_STATUSES,
+  ORDER_STATUS_LABELS,
+  OrderCancellationCause,
+  OrderStatus,
+  PAID_STATUSES,
+} from '../order-status.js';
 import { OrdersService } from '../orders.service.js';
 import { ReturnRequest } from '../returns/entities/return-request.entity.js';
 import { ADMIN_CANCEL_REASON_LABELS, AdminCancelOrderDto } from './dto/admin-cancel-order.dto.js';
@@ -130,11 +137,12 @@ export class AdminOrdersService {
       const a = order.shippingAddressSnapshot;
       return [
         order.orderNumber,
-        order.createdAt.toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }),
+        // 24 h: el formato de 12 h de es-AR no indica a. m./p. m. en todos los entornos.
+        order.createdAt.toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hourCycle: 'h23' }),
         `${order.user.firstName} ${order.user.lastName}`,
         order.user.email,
-        order.status,
-        customerPaymentStatus(order),
+        ORDER_STATUS_LABELS[order.status],
+        PAYMENT_STATUS_LABELS[customerPaymentStatus(order)],
         itemCounts.get(order.id) ?? 0,
         order.total,
         order.shippingMethodSnapshot.name,

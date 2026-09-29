@@ -58,8 +58,8 @@ export interface OrderItem {
   quantity: number
   unitPrice: string
   subtotal: string
-  /** CU-15 (precondición 4): el ítem ya tiene una solicitud de cambio o devolución. */
-  hasReturnRequest: boolean
+  /** CU-15 (paso 3): unidades que todavía se pueden pedir (compradas − pedidas en solicitudes abiertas − aprobadas). */
+  eligibleReturnQuantity: number
 }
 
 /** CU-13 (paso 3): estado de pago que ve el Cliente. */
@@ -74,6 +74,8 @@ export type RefundStatus = 'en_tramite' | 'reembolsado' | 'rechazado' | 'pendien
 export type ReturnRequestType = 'cambio' | 'devolucion'
 export type ReturnRequestStatus = 'solicitada' | 'aprobada' | 'rechazada' | 'resuelta'
 
+export type ReplacementStatus = 'pendiente_despacho' | 'despachado'
+
 export interface ReturnRequestSummary {
   id: string
   requestNumber: number
@@ -81,10 +83,25 @@ export interface ReturnRequestSummary {
   status: ReturnRequestStatus
   reason: string
   createdAt: string
+  approvedAt: string | null
   resolvedAt: string | null
   resolutionNote: string | null
   photos: string[]
-  items: { orderItemId: string; productName: string; quantityRequested: number; quantityApproved: number | null }[]
+  items: {
+    orderItemId: string
+    productName: string
+    quantityRequested: number
+    quantityApproved: number | null
+    quantityReceived: number | null
+  }[]
+  /** CU-22 (flujo 10a): reposición de un cambio. */
+  replacements: {
+    productName: string
+    variantAttributes: Record<string, string>
+    quantity: number
+    status: ReplacementStatus
+    tracking: { carrier: string | null; number: string | null; dispatchedAt: string | null } | null
+  }[]
 }
 
 /** CU-13 (pasos 5-7): detalle del pedido. También lo devuelve la página de retorno de la pasarela (CU-05 paso 11). */

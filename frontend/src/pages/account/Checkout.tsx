@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AddressForm } from '../../features/addresses/components/AddressForm'
+import { formatShippingCost } from '../../features/orders/order-labels'
 import { addressesService } from '../../services/addresses.service'
 import { checkoutService } from '../../services/checkout.service'
 import type { CheckoutAdjustment, CheckoutProblem } from '../../types/order.types'
@@ -257,7 +258,7 @@ export function Checkout() {
               <span className="font-medium">{method.name}</span>
               {method.description && <span className="block text-neutral-500">{method.description}</span>}
             </span>
-            <span className="text-sm font-medium">${method.cost}</span>
+            <span className="text-sm font-medium">{formatShippingCost(method.cost)}</span>
           </label>
         ))}
       </section>
@@ -291,7 +292,7 @@ export function Checkout() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-neutral-600">Envío ({quote.data.shippingMethod.name})</dt>
-                <dd>${quote.data.shippingCost}</dd>
+                <dd>{formatShippingCost(quote.data.shippingCost)}</dd>
               </div>
               <div className="flex justify-between text-base font-semibold">
                 <dt>Total</dt>
