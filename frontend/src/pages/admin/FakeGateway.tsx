@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { useFakeGatewayEnabled } from '../../features/admin/useAdminSummary'
+import { useFakeGatewayStatus } from '../../features/admin/useAdminSummary'
 import { apiErrorMessage } from '../../features/orders/order-labels'
 import { fakePaymentService } from '../../services/fake-payment.service'
 
@@ -23,7 +23,8 @@ function OrderLink({ order }: { order: { id: string; orderNumber: number | null 
  * webhook firmado que mandaría la pasarela real.
  */
 export function AdminFakeGateway() {
-  const enabled = useFakeGatewayEnabled()
+  const status = useFakeGatewayStatus()
+  const enabled = status.data?.enabled === true
   const queryClient = useQueryClient()
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['fake-gateway', 'pending'],
@@ -45,6 +46,26 @@ export function AdminFakeGateway() {
   })
   const actionError = settlePayment.error ?? settleRefund.error
   const busy = settlePayment.isPending || settleRefund.isPending
+
+  if (status.isPending) {
+    return <main className="mx-auto max-w-4xl px-4 py-8 text-neutral-600">Cargando…</main>
+  }
+
+  if (status.isError) {
+    return (
+      <main className="mx-auto max-w-4xl space-y-3 px-4 py-8 text-sm">
+        <p className="text-red-600">{apiErrorMessage(status.error, 'No se pudo consultar el estado de la pasarela simulada.')}</p>
+        <button
+          type="button"
+          disabled={status.isFetching}
+          onClick={() => void status.refetch()}
+          className="rounded border border-neutral-300 px-3 py-1 text-neutral-700 disabled:opacity-50"
+        >
+          Reintentar
+        </button>
+      </main>
+    )
+  }
 
   if (!enabled) {
     return (

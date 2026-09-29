@@ -173,4 +173,36 @@ describe('OrderCancellationService', () => {
       ).resolves.toEqual({ refundRequested: false });
     });
   });
+
+  describe('CU-19 Ver y gestionar pedidos (admin), flujo 5a', () => {
+    const adminCancel = (o: Order) =>
+      service.applyCancellation(manager as never, o, {
+        actorId: 'admin-1',
+        cause: OrderCancellationCause.ADMINISTRADOR,
+        reason: 'Sospecha de fraude',
+        refundOrigin: RefundOrigin.CU_19,
+      });
+
+    it('antes del despacho reingresa el stock y reembolsa el total, como CU-14', async () => {
+      const o = order({ status: OrderStatus.EN_PREPARACION, paidAt: new Date(), subtotal: '600.00' });
+
+      await adminCancel(o);
+
+      expect(ordersService.returnStockOnCancel).toHaveBeenCalledWith(manager, o, 'admin-1');
+      expect(ledger.requestRefund).toHaveBeenCalledWith(
+        manager,
+        expect.objectContaining({ amount: '700.00', originCu: RefundOrigin.CU_19 }),
+      );
+    });
+
+    it('un pedido despachado no reingresa stock (vuelve por CU-18) y se reembolsa sin el envío', async () => {
+      const o = order({ status: OrderStatus.DESPACHADO, paidAt: new Date(), subtotal: '600.00' });
+
+      const effects = await adminCancel(o);
+
+      expect(ordersService.returnStockOnCancel).not.toHaveBeenCalled();
+      expect(ledger.requestRefund).toHaveBeenCalledWith(manager, expect.objectContaining({ amount: '600.00' }));
+      expect(effects).toEqual({ refundRequested: true, refundId: 'refund-1', previousStatus: OrderStatus.DESPACHADO });
+    });
+  });
 });

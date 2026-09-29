@@ -21,6 +21,10 @@ export const AppDataSource = new DataSource({
   password: process.env.DATABASE_PASSWORD,
   database: process.env.DATABASE_NAME,
   synchronize: false,
+  // Una transacción por migración: Postgres no deja usar un valor agregado
+  // con `ALTER TYPE ... ADD VALUE` hasta que su transacción se confirma, y
+  // una migración posterior puede depender de ese valor (ej. 'venta').
+  migrationsTransactionMode: 'each',
   entities: ['src/**/*.entity.ts'],
   migrations: ['src/migrations/*.ts'],
 });

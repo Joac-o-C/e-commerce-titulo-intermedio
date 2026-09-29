@@ -15,14 +15,22 @@ export function useAdminSummary() {
   })
 }
 
-/** La pantalla "Pasarela simulada" sólo existe con PAYMENT_GATEWAY=fake. */
-export function useFakeGatewayEnabled() {
+/**
+ * La pantalla "Pasarela simulada" sólo existe con PAYMENT_GATEWAY=fake.
+ * Devuelve la query entera para que la pantalla distinga "cargando" o
+ * "error" de "apagada".
+ */
+export function useFakeGatewayStatus() {
   const isAdmin = useAuthStore((s) => s.user?.role === 'administrador')
-  const query = useQuery({
+  return useQuery({
     queryKey: ['fake-gateway', 'status'],
     queryFn: fakePaymentService.status,
     enabled: isAdmin,
     staleTime: Infinity,
   })
-  return query.data?.enabled ?? false
+}
+
+/** Para la barra de admin: mientras no se sabe, el link queda oculto. */
+export function useFakeGatewayEnabled() {
+  return useFakeGatewayStatus().data?.enabled ?? false
 }
