@@ -9,6 +9,16 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, Update
  * métodos sembrados por migración. El ABM admin llegó en la Fase 6
  * (alcance extra pedido por el usuario).
  */
+/**
+ * Si el Cliente recibe el pedido en su dirección o lo retira (local o
+ * sucursal del correo). Lo usa el correo de confirmación (CU-05 paso 9);
+ * agregado en la Fase 7, decisión con el usuario.
+ */
+export enum ShippingMethodType {
+  DOMICILIO = 'domicilio',
+  RETIRO = 'retiro',
+}
+
 @Entity('shipping_methods')
 export class ShippingMethod {
   @PrimaryGeneratedColumn('uuid')
@@ -28,6 +38,14 @@ export class ShippingMethod {
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   cost: string;
+
+  @Column({
+    type: 'enum',
+    enum: ShippingMethodType,
+    enumName: 'shipping_method_type',
+    default: ShippingMethodType.DOMICILIO,
+  })
+  type: ShippingMethodType;
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;

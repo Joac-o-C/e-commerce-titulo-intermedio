@@ -1,7 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ShippingMethod } from '../entities/shipping-method.entity.js';
+import { ShippingMethod, ShippingMethodType } from '../entities/shipping-method.entity.js';
 import { AdminShippingMethodsService } from './admin-shipping-methods.service.js';
 
 describe('AdminShippingMethodsService', () => {
@@ -26,27 +26,35 @@ describe('AdminShippingMethodsService', () => {
 
   describe('ABM de métodos de envío (alcance extra de la Fase 6)', () => {
     it('crea un método activo, con el costo con 2 decimales; costo 0 permitido', async () => {
-      const created = await service.create({ name: 'Retiro en local', cost: 0 });
+      const created = await service.create({ name: 'Retiro en local', cost: 0, type: ShippingMethodType.RETIRO });
 
-      expect(created).toEqual(expect.objectContaining({ name: 'Retiro en local', cost: '0.00', isActive: true, description: null }));
+      expect(created).toEqual(
+        expect.objectContaining({ name: 'Retiro en local', cost: '0.00', isActive: true, description: null, type: 'retiro' }),
+      );
     });
 
     it('nombre repetido (sin distinguir mayúsculas, lo detecta el índice único): 409', async () => {
       repo.save.mockRejectedValue(Object.assign(new Error('dup'), { code: '23505' }));
 
-      await expect(service.create({ name: 'envío ESTÁNDAR', cost: 10 })).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.create({ name: 'envío ESTÁNDAR', cost: 10, type: ShippingMethodType.DOMICILIO })).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('otro error de base no se disfraza de nombre repetido', async () => {
       repo.save.mockRejectedValue(new Error('conexión caída'));
 
-      await expect(service.create({ name: 'X', cost: 10 })).rejects.toThrow('conexión caída');
+      await expect(service.create({ name: 'X', cost: 10, type: ShippingMethodType.DOMICILIO })).rejects.toThrow('conexión caída');
     });
 
     it('edita sólo los campos enviados', async () => {
       const updated = await service.update('m-1', { cost: 5000.5 });
 
       expect(updated).toEqual(expect.objectContaining({ name: 'Envío estándar', cost: '5000.50' }));
+    });
+
+    it('cambia el tipo (domicilio / retiro) sin tocar el resto', async () => {
+      const updated = await service.update('m-1', { type: ShippingMethodType.RETIRO });
+
+      expect(updated).toEqual(expect.objectContaining({ name: 'Envío estándar', type: 'retiro' }));
     });
 
     it('editar un método inexistente: 404', async () => {

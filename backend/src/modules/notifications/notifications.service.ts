@@ -1,10 +1,14 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MoreThanOrEqual, Repository } from 'typeorm';
+import { In, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import { User } from '../users/entities/user.entity.js';
 import { EmailLog, EmailStatus, EmailTemplate } from './entities/email-log.entity.js';
-import { MAIL_PROVIDER } from './mail-provider.interface.js';
+import { MAIL_PROVIDER, MailPermanentError } from './mail-provider.interface.js';
 import type { MailProvider } from './mail-provider.interface.js';
+import { TEMPLATES } from './templates/index.js';
+import type { ComposedMessage, TemplateContext } from './templates/index.js';
 
 export interface SendEmailParams {
   userId?: string | null;
@@ -31,28 +35,55 @@ const RATE_LIMITED_TEMPLATES: ReadonlySet<EmailTemplate> = new Set([
   EmailTemplate.RESET_PASSWORD,
 ]);
 
+/** CU-20 (flujo 4a): espera antes de cada uno de los 5 reintentos (decisión de la Fase 7). */
+export const RETRY_BACKOFF_MIN = [5, 10, 20, 40, 80] as const;
+
+/**
+ * Plazo durante el cual una fila `pendiente`/`reintentando` pertenece a quien
+ * la está entregando. Si el proceso se cae a mitad de camino, el cron la
+ * vuelve a tomar pasado este plazo.
+ */
+const DELIVERY_LEASE_MS = 10 * 60 * 1000;
+
+/** Datos que no se guardan en claro en la auditoría (tokens de un solo uso). */
+const REDACTED_KEYS: ReadonlySet<string> = new Set(['token']);
+
 /**
  * Implementación de CU-20 (Enviar notificación por correo): valida
- * destinatario y plantilla, aplica el límite de frecuencia, delega en el
- * MailProvider configurado y deja auditoría en EmailLog. Es un CU
- * "include" sin actor humano — nunca revierte al CU solicitante por una
- * falla propia (el solicitante sigue su flujo con el resultado informado).
+ * destinatario y plantilla, aplica el límite de frecuencia, compone el
+ * mensaje y lo entrega al Servicio de Correo en segundo plano, con
+ * reintentos y registro de rebotes, dejando auditoría en EmailLog. Es un
+ * CU "include" sin actor humano — nunca revierte al CU solicitante.
  */
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
   private readonly maxPerHour: number;
+  private readonly baseContext: Omit<TemplateContext, 'recipientName' | 'orderUrl'>;
 
   constructor(
     @InjectRepository(EmailLog)
     private readonly emailLogRepo: Repository<EmailLog>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     @Inject(MAIL_PROVIDER)
     private readonly mailProvider: MailProvider,
     configService: ConfigService,
   ) {
     this.maxPerHour = configService.get<number>('EMAIL_RATE_LIMIT_MAX_PER_HOUR')!;
+    this.baseContext = {
+      frontendUrl: configService.get<string>('FRONTEND_URL')!,
+      verificationTtlHours: configService.get<number>('EMAIL_VERIFICATION_TOKEN_TTL_HOURS')!,
+      resetTtlHours: configService.get<number>('PASSWORD_RESET_TOKEN_TTL_HOURS')!,
+      reservationTtlHours: configService.get<number>('ORDER_RESERVATION_TTL_HOURS')!,
+    };
   }
 
   /**
+   * Resuelve en el momento sólo lo que el CU solicitante necesita saber
+   * (flujos 2a, 2b y 1a); la entrega al Servicio de Correo corre en
+   * segundo plano y el solicitante no la espera (Observaciones de la ficha).
+   *
    * @usecase CU-20 Enviar notificación por correo
    */
   async send(params: SendEmailParams): Promise<SendEmailResult> {
@@ -61,12 +92,14 @@ export class NotificationsService {
 
     // CU-20 (flujo 2a): destinatario sin dirección de correo válida.
     if (!recipientEmail || !EMAIL_REGEX.test(recipientEmail)) {
-      return this.log({ ...base, status: EmailStatus.FALLIDO });
+      return this.log({ ...base, status: EmailStatus.FALLIDO, lastError: 'Destinatario sin dirección de correo válida' });
     }
 
     // CU-20 (flujo 2b): la plantilla solicitada no existe.
-    if (!Object.values(EmailTemplate).includes(template)) {
-      return this.log({ ...base, status: EmailStatus.FALLIDO });
+    const render = TEMPLATES[template];
+    if (!render) {
+      this.logger.error(`Plantilla de correo inexistente: ${template}`);
+      return this.log({ ...base, status: EmailStatus.FALLIDO, lastError: 'Plantilla inexistente' });
     }
 
     // CU-20 (flujo 1a): la cuenta ya alcanzó el máximo de esa plantilla en
@@ -75,16 +108,140 @@ export class NotificationsService {
       return this.log({ ...base, status: EmailStatus.OMITIDO_POR_RATE_LIMIT });
     }
 
-    const { subject, body } = this.composeMessage(template, data);
+    // CU-20 (paso 3): compone asunto y cuerpo con los datos de la plantilla.
+    let message: ComposedMessage;
+    try {
+      message = render(data ?? {}, await this.buildContext(userId, relatedOrderId));
+    } catch (err) {
+      // Un error al componer es un defecto de la plantilla: mismo tratamiento que 2b.
+      this.logger.error(`No se pudo componer la plantilla ${template}`, err as Error);
+      return this.log({ ...base, status: EmailStatus.FALLIDO, lastError: `Error al componer: ${(err as Error).message}` });
+    }
+
+    const row = await this.emailLogRepo.save(
+      this.emailLogRepo.create({
+        ...this.auditFields(base),
+        status: EmailStatus.PENDIENTE,
+        pendingMessage: message,
+        nextAttemptAt: new Date(Date.now() + DELIVERY_LEASE_MS),
+      }),
+    );
+
+    // CU-20 (pasos 4-6) en segundo plano: una falla de correo nunca llega al solicitante.
+    void this.deliver(row).catch((err) => {
+      this.logger.error(`Correo ${row.id}: error inesperado al entregar`, err as Error);
+    });
+    return { status: EmailStatus.PENDIENTE };
+  }
+
+  /**
+   * Toma los correos cuya espera de reintento venció (o que quedaron
+   * colgados en `pendiente` por una caída del proceso) y los vuelve a
+   * entregar. Cada fila se reclama con un UPDATE condicional antes de
+   * enviarla, así dos ejecuciones concurrentes nunca mandan el mismo correo.
+   *
+   * @usecase CU-20 Enviar notificación por correo
+   */
+  @Cron('*/5 * * * *')
+  async retryPending(): Promise<void> {
+    const now = new Date();
+    const due = await this.emailLogRepo.find({
+      select: { id: true },
+      where: {
+        status: In([EmailStatus.PENDIENTE, EmailStatus.REINTENTANDO]),
+        nextAttemptAt: LessThanOrEqual(now),
+      },
+      order: { nextAttemptAt: 'ASC' },
+      take: 50,
+    });
+
+    for (const { id } of due) {
+      const claimed = await this.emailLogRepo.update(
+        {
+          id,
+          status: In([EmailStatus.PENDIENTE, EmailStatus.REINTENTANDO]),
+          nextAttemptAt: LessThanOrEqual(now),
+        },
+        { nextAttemptAt: new Date(Date.now() + DELIVERY_LEASE_MS) },
+      );
+      if (claimed.affected !== 1) continue; // la tomó otra ejecución
+
+      const row = await this.emailLogRepo.findOneBy({ id });
+      if (row) await this.deliver(row);
+    }
+  }
+
+  /**
+   * Entrega un correo ya reclamado al Servicio de Correo y registra el
+   * resultado: enviado, rebote (5a) o fallo transitorio con reintento (4a).
+   *
+   * @usecase CU-20 Enviar notificación por correo
+   */
+  private async deliver(row: EmailLog): Promise<void> {
+    if (!row.pendingMessage) {
+      await this.emailLogRepo.update(row.id, {
+        status: EmailStatus.FALLIDO,
+        nextAttemptAt: null,
+        lastError: 'Sin mensaje para entregar',
+      });
+      return;
+    }
 
     try {
-      await this.mailProvider.send(recipientEmail, subject, body);
-      return this.log({ ...base, status: EmailStatus.ENVIADO });
-    } catch {
-      // CU-20 (flujo 4a): el Servicio de Correo no responde o rechaza el
-      // mensaje. Se registra el fallo; el CU solicitante continúa igual.
-      return this.log({ ...base, status: EmailStatus.FALLIDO });
+      // CU-20 (pasos 4-5).
+      await this.mailProvider.send({ to: row.recipientEmail, ...row.pendingMessage });
+    } catch (err) {
+      await this.handleDeliveryError(row, err);
+      return;
     }
+
+    // CU-20 (paso 6): registra el envío. El mensaje (y su token) ya no hace falta.
+    await this.emailLogRepo.update(row.id, {
+      status: EmailStatus.ENVIADO,
+      sentAt: new Date(),
+      pendingMessage: null,
+      nextAttemptAt: null,
+      lastError: null,
+    });
+  }
+
+  private async handleDeliveryError(row: EmailLog, err: unknown): Promise<void> {
+    const lastError = truncate(err instanceof Error ? err.message : String(err));
+
+    // CU-20 (flujo 5a): rebote — se registra asociado a la cuenta, sin reintentar.
+    if (err instanceof MailPermanentError) {
+      this.logger.warn(`Correo ${row.id} rebotado (${row.recipientEmail}): ${lastError}`);
+      await this.emailLogRepo.update(row.id, {
+        status: EmailStatus.REBOTADO,
+        pendingMessage: null,
+        nextAttemptAt: null,
+        lastError,
+      });
+      if (row.userId) await this.userRepo.update(row.userId, { emailBouncedAt: new Date() });
+      return;
+    }
+
+    // CU-20 (flujo 4a): falla transitoria — se encola para reintentar, hasta agotar los reintentos.
+    const attempts = row.attempts + 1;
+    if (attempts <= RETRY_BACKOFF_MIN.length) {
+      this.logger.warn(`Correo ${row.id}: falló el intento ${attempts}, se reintenta (${lastError})`);
+      await this.emailLogRepo.update(row.id, {
+        status: EmailStatus.REINTENTANDO,
+        attempts,
+        nextAttemptAt: new Date(Date.now() + RETRY_BACKOFF_MIN[attempts - 1] * 60 * 1000),
+        lastError,
+      });
+      return;
+    }
+
+    this.logger.error(`Correo ${row.id}: se agotaron los reintentos (${lastError})`);
+    await this.emailLogRepo.update(row.id, {
+      status: EmailStatus.FALLIDO,
+      attempts,
+      pendingMessage: null,
+      nextAttemptAt: null,
+      lastError,
+    });
   }
 
   /**
@@ -100,50 +257,44 @@ export class NotificationsService {
     return count >= this.maxPerHour;
   }
 
-  /**
-   * Compone asunto y cuerpo del mensaje. El catálogo completo de las 9
-   * plantillas (contenido real) se termina de pulir en la Fase 7; acá
-   * alcanza con un cuerpo genérico que deja trazabilidad de qué se envió.
-   */
-  private composeMessage(
-    template: EmailTemplate,
-    data?: Record<string, unknown>,
-  ): { subject: string; body: string } {
-    const subjects: Partial<Record<EmailTemplate, string>> = {
-      [EmailTemplate.VERIFICACION]: 'Confirmá tu cuenta',
-      [EmailTemplate.RESET_PASSWORD]: 'Restablecé tu contraseña',
-      [EmailTemplate.PASSWORD_CHANGED]: 'Tu contraseña fue cambiada',
-      [EmailTemplate.RESULTADO_PAGO]: 'Novedades sobre el pago de tu pedido',
-      [EmailTemplate.CANCELACION]: 'Tu pedido fue cancelado',
-      [EmailTemplate.COMPROBANTE_POSVENTA]: 'Recibimos tu solicitud de cambio o devolución',
-      [EmailTemplate.RESULTADO_POSVENTA]: 'Novedades sobre tu solicitud de cambio o devolución',
-      [EmailTemplate.CAMBIO_ESTADO_PEDIDO]: 'Tu pedido cambió de estado',
-      [EmailTemplate.RESULTADO_REEMBOLSO]: 'Novedades sobre tu reembolso',
-    };
+  private async buildContext(userId?: string | null, relatedOrderId?: string | null): Promise<TemplateContext> {
+    const user = userId
+      ? await this.userRepo.findOne({ select: { id: true, firstName: true }, where: { id: userId } })
+      : null;
     return {
-      subject: subjects[template] ?? `Notificación: ${template}`,
-      body: JSON.stringify(data ?? {}),
+      ...this.baseContext,
+      recipientName: user?.firstName ?? null,
+      orderUrl: relatedOrderId ? `${this.baseContext.frontendUrl}/account/orders/${relatedOrderId}` : null,
     };
   }
 
-  private async log(params: {
-    userId?: string | null;
-    recipientEmail: string;
-    template: EmailTemplate;
-    data?: Record<string, unknown>;
-    relatedOrderId?: string | null;
-    status: EmailStatus;
-  }): Promise<SendEmailResult> {
+  private auditFields(params: Omit<SendEmailParams, 'template'> & { template: EmailTemplate }) {
+    return {
+      userId: params.userId ?? null,
+      recipientEmail: params.recipientEmail,
+      template: params.template,
+      payloadSnapshot: params.data ? redact(params.data) : null,
+      relatedOrderId: params.relatedOrderId ?? null,
+    };
+  }
+
+  /** Registro de un intento que termina sin llegar al Servicio de Correo (2a, 2b, 1a). */
+  private async log(params: SendEmailParams & { status: EmailStatus; lastError?: string }): Promise<SendEmailResult> {
     await this.emailLogRepo.save(
       this.emailLogRepo.create({
-        userId: params.userId ?? null,
-        recipientEmail: params.recipientEmail,
-        template: params.template,
-        payloadSnapshot: params.data ?? null,
-        relatedOrderId: params.relatedOrderId ?? null,
+        ...this.auditFields(params),
         status: params.status,
+        lastError: params.lastError ?? null,
       }),
     );
     return { status: params.status };
   }
+}
+
+function redact(data: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(data).map(([k, v]) => [k, REDACTED_KEYS.has(k) ? '[redactado]' : v]));
+}
+
+function truncate(message: string): string {
+  return message.length > 500 ? `${message.slice(0, 497)}...` : message;
 }

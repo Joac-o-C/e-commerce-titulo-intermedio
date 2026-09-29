@@ -62,6 +62,7 @@ Direcciones:
 - Frontend: http://localhost:5173
 - API: http://localhost:3000
 - Adminer: http://localhost:8080. Entrás con servidor postgres, usuario, contraseña y base ecommerce.
+- Mailpit: http://localhost:8025. Bandeja donde llegan todos los correos que manda el backend (verificación, reset, pedidos...).
 
 tests:
 unitarios: npm test 

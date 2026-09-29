@@ -48,6 +48,10 @@ export class User {
   })
   status: UserStatus;
 
+  /** CU-20 (flujo 5a): último rebote informado por el Servicio de Correo, para revisión. */
+  @Column({ name: 'email_bounced_at', type: 'timestamptz', nullable: true })
+  emailBouncedAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

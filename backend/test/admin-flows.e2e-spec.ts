@@ -7,6 +7,8 @@ import { App } from 'supertest/types';
 import { Repository } from 'typeorm';
 import { AppModule } from '../src/app.module.js';
 import { EmailLog, EmailTemplate } from '../src/modules/notifications/entities/email-log.entity.js';
+import { MAIL_PROVIDER } from '../src/modules/notifications/mail-provider.interface.js';
+import { CapturedMail } from './support/captured-mail.js';
 import { OrderStatus } from '../src/modules/orders/order-status.js';
 import { Refund, RefundOrigin, RefundStatus } from '../src/modules/payments/entities/refund.entity.js';
 import { Product } from '../src/modules/products/entities/product.entity.js';
@@ -25,6 +27,7 @@ import { User, UserRole } from '../src/modules/users/entities/user.entity.js';
 describe('Administración de pedidos, reembolsos y posventa (e2e)', () => {
   let app: INestApplication<App>;
   let emailLogRepo: Repository<EmailLog>;
+  const mail = new CapturedMail();
   let variantRepo: Repository<ProductVariant>;
   let productRepo: Repository<Product>;
   let refundRepo: Repository<Refund>;
@@ -50,12 +53,9 @@ describe('Administración de pedidos, reembolsos y posventa (e2e)', () => {
       .post('/auth/register')
       .send({ firstName: 'Ana', lastName: 'Admin e2e', email, password, passwordConfirmation: password, acceptTerms: true })
       .expect(201);
-    const log = await emailLogRepo.findOneOrFail({
-      where: { recipientEmail: email, template: EmailTemplate.VERIFICACION },
-      order: { createdAt: 'DESC' },
-    });
+    const token = await mail.tokenFor(email, '/verify-email');
     await request(server())
-      .post(`/auth/verify-email?token=${(log.payloadSnapshot as { token: string }).token}`)
+      .post(`/auth/verify-email?token=${token}`)
       .expect(200);
   };
   const login = async (email: string) =>
@@ -107,7 +107,10 @@ describe('Administración de pedidos, reembolsos y posventa (e2e)', () => {
     request(server()).post(`/payments/fake/refunds/${refund.externalRefundId}/settle`).send({ outcome }).expect(201);
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(MAIL_PROVIDER)
+      .useValue(mail)
+      .compile();
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));

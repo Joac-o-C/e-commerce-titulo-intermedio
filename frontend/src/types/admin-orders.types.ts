@@ -240,11 +240,20 @@ export interface ReceiveReturnInput {
 
 // ─── Métodos de envío (alcance extra de la Fase 6) ─────────────────────
 
+/** Entrega a domicilio o retiro (local o sucursal); lo usa el correo de confirmación del pedido. */
+export type ShippingMethodType = 'domicilio' | 'retiro'
+
+export const SHIPPING_METHOD_TYPE_LABELS: Record<ShippingMethodType, string> = {
+  domicilio: 'Entrega a domicilio',
+  retiro: 'Retiro',
+}
+
 export interface AdminShippingMethod {
   id: string
   name: string
   description: string | null
   cost: string
+  type: ShippingMethodType
   isActive: boolean
 }
 
@@ -252,6 +261,7 @@ export interface ShippingMethodInput {
   name: string
   description?: string | null
   cost: number
+  type: ShippingMethodType
 }
 
 // ─── Pasarela simulada (PAYMENT_GATEWAY=fake) ──────────────────────────

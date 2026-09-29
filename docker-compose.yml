@@ -28,5 +28,15 @@ services:
     depends_on:
       - postgres
 
+  # CU-20: Servicio de Correo local. Recibe por SMTP (:1025) todo lo que
+  # manda el backend y lo muestra en una bandeja web (http://localhost:8025).
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: ti-ecommerce-mailpit
+    restart: unless-stopped
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+
 volumes:
   ti_ecommerce_pgdata:

@@ -7,7 +7,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Table, type TableColumn } from '../../components/ui/Table'
 import { apiErrorMessage, formatShippingCost } from '../../features/orders/order-labels'
 import { adminShippingService } from '../../services/admin-shipping.service'
-import type { AdminShippingMethod } from '../../types/admin-orders.types'
+import { SHIPPING_METHOD_TYPE_LABELS, type AdminShippingMethod } from '../../types/admin-orders.types'
 
 /** Mismas reglas que el DTO del backend: nombre obligatorio, costo ≥ 0 con hasta 2 decimales (0 = gratis). */
 const schema = z.object({
@@ -17,10 +17,11 @@ const schema = z.object({
     .string()
     .trim()
     .regex(/^\d{1,8}([.,]\d{1,2})?$/, 'Un importe mayor o igual a 0, con hasta 2 decimales'),
+  type: z.enum(['domicilio', 'retiro']),
 })
 type FormValues = z.infer<typeof schema>
 
-const empty: FormValues = { name: '', description: '', cost: '' }
+const empty: FormValues = { name: '', description: '', cost: '', type: 'domicilio' }
 
 /**
  * ABM de métodos de envío (alcance extra de la Fase 6). Baja lógica
@@ -54,7 +55,12 @@ export function AdminShippingMethods() {
 
   const save = useMutation({
     mutationFn: (values: FormValues) => {
-      const input = { name: values.name, description: values.description || null, cost: Number(values.cost.replace(',', '.')) }
+      const input = {
+        name: values.name,
+        description: values.description || null,
+        cost: Number(values.cost.replace(',', '.')),
+        type: values.type,
+      }
       return editing ? adminShippingService.update(editing.id, input) : adminShippingService.create(input)
     },
     onSuccess: (method) => done(editing ? `Se guardó "${method.name}".` : `Se creó "${method.name}".`),
@@ -88,7 +94,7 @@ export function AdminShippingMethods() {
     setEditing(method)
     setNotice(null)
     setError(null)
-    reset({ name: method.name, description: method.description ?? '', cost: method.cost })
+    reset({ name: method.name, description: method.description ?? '', cost: method.cost, type: method.type })
   }
 
   const activeCount = methods?.filter((m) => m.isActive).length ?? 0
@@ -104,6 +110,7 @@ export function AdminShippingMethods() {
         </>
       ),
     },
+    { header: 'Tipo', render: (m) => SHIPPING_METHOD_TYPE_LABELS[m.type] },
     { header: 'Costo', render: (m) => formatShippingCost(m.cost), className: 'text-right' },
     { header: 'Estado', render: (m) => (m.isActive ? 'Activo' : 'Inactivo') },
     {
@@ -139,9 +146,9 @@ export function AdminShippingMethods() {
 
       <form
         onSubmit={handleSubmit((values) => save.mutate(values))}
-        className="grid gap-3 rounded-lg border border-neutral-200 bg-white p-4 text-sm sm:grid-cols-3"
+        className="grid gap-3 rounded-lg border border-neutral-200 bg-white p-4 text-sm sm:grid-cols-4"
       >
-        <h2 className="font-semibold text-neutral-800 sm:col-span-3">{editing ? `Editar "${editing.name}"` : 'Nuevo método'}</h2>
+        <h2 className="font-semibold text-neutral-800 sm:col-span-4">{editing ? `Editar "${editing.name}"` : 'Nuevo método'}</h2>
         <label className="flex flex-col gap-1">
           <span className="text-neutral-600">Nombre</span>
           <input {...register('name')} className="rounded border border-neutral-300 px-2 py-1.5" />
@@ -153,16 +160,23 @@ export function AdminShippingMethods() {
           {errors.description && <span className="text-xs text-red-600">{errors.description.message}</span>}
         </label>
         <label className="flex flex-col gap-1">
+          <span className="text-neutral-600">Tipo</span>
+          <select {...register('type')} className="rounded border border-neutral-300 px-2 py-1.5">
+            <option value="domicilio">{SHIPPING_METHOD_TYPE_LABELS.domicilio}</option>
+            <option value="retiro">{SHIPPING_METHOD_TYPE_LABELS.retiro} (local o sucursal)</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
           <span className="text-neutral-600">Costo ($, 0 = gratis)</span>
           <input {...register('cost')} inputMode="decimal" className="rounded border border-neutral-300 px-2 py-1.5" />
           {errors.cost && <span className="text-xs text-red-600">{errors.cost.message}</span>}
         </label>
         {costChanged && (
-          <p className="text-xs text-amber-800 sm:col-span-3">
+          <p className="text-xs text-amber-800 sm:col-span-4">
             El nuevo costo sólo se aplica a los pedidos nuevos: los pedidos existentes conservan el costo con el que se compraron.
           </p>
         )}
-        <div className="flex gap-2 sm:col-span-3">
+        <div className="flex gap-2 sm:col-span-4">
           <button type="submit" disabled={save.isPending} className="rounded bg-neutral-800 px-3 py-1.5 text-white disabled:opacity-50">
             {editing ? 'Guardar' : 'Crear'}
           </button>

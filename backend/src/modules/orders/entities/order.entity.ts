@@ -15,6 +15,7 @@ import { User } from '../../users/entities/user.entity.js';
 import { OrderCancellationCause, OrderStatus } from '../order-status.js';
 import { OrderItem } from './order-item.entity.js';
 import { OrderStatusHistory } from './order-status-history.entity.js';
+import type { ShippingMethodType } from './shipping-method.entity.js';
 
 /** Copia de la dirección al confirmar (CU-03 paso 14): no cambia si se edita la libreta. */
 export interface ShippingAddressSnapshot {
@@ -33,6 +34,9 @@ export interface ShippingMethodSnapshot {
   id: string;
   name: string;
   cost: string;
+  /** Desde la Fase 7; los pedidos anteriores no lo tienen (se leen como `domicilio`). */
+  type?: ShippingMethodType;
+  description?: string | null;
 }
 
 /**

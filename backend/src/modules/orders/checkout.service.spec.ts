@@ -35,7 +35,7 @@ const address = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const shipping = { id: 'ship-1', name: 'Estándar', cost: '500.00', isActive: true };
+const shipping = { id: 'ship-1', name: 'Estándar', description: null, cost: '500.00', type: 'domicilio', isActive: true };
 
 const cartItem = (overrides: { price?: string; snapshot?: string; isPublished?: boolean; quantity?: number } = {}) => ({
   id: 'item-1',
@@ -132,6 +132,8 @@ describe('CheckoutService', () => {
           total: '700.00',
           stockReservationActive: true,
           shippingAddressSnapshot: expect.objectContaining({ street: 'Calle', number: '123' }),
+          // El tipo y la descripción viajan en el snapshot para el correo de confirmación (Fase 7).
+          shippingMethodSnapshot: { id: 'ship-1', name: 'Estándar', cost: '500.00', type: 'domicilio', description: null },
         }),
       );
       expect(stockReservation.reserve).toHaveBeenCalledWith(manager, [{ variantId: 'variant-1', quantity: 2 }]);

@@ -54,6 +54,17 @@ export const envValidationSchema = Joi.object({
   // cuenta y plantilla dentro de la ventana.
   EMAIL_RATE_LIMIT_MAX_PER_HOUR: Joi.number().default(3),
 
+  // CU-20: Servicio de Correo. `smtp` (default) habla con cualquier servidor
+  // SMTP — en desarrollo, Mailpit de docker-compose (bandeja en :8025);
+  // `console` sólo loguea el mensaje.
+  MAIL_PROVIDER: Joi.string().valid('smtp', 'console').default('smtp'),
+  SMTP_HOST: Joi.string().default('localhost'),
+  SMTP_PORT: Joi.number().default(1025),
+  SMTP_SECURE: Joi.boolean().default(false),
+  SMTP_USER: Joi.string().optional(),
+  SMTP_PASS: Joi.string().optional(),
+  MAIL_FROM: Joi.string().default('Tienda <no-reply@tienda.local>'),
+
   // `then` en los `.when()` es la API de Joi, no un objeto "thenable".
   /* oxlint-disable unicorn/no-thenable */
   // CU-03/CU-05: pasarela de pago. `fake` simula MercadoPago en memoria
@@ -84,7 +95,8 @@ export const envValidationSchema = Joi.object({
   // webhooks. Sin ella, el sandbox real sólo se reconcilia por el cron.
   MP_NOTIFICATION_URL: Joi.string().uri().optional(),
   /* oxlint-enable unicorn/no-thenable */
-  // Base de las páginas de retorno de la pasarela (éxito/pendiente/error).
+  // Base de las páginas de retorno de la pasarela (éxito/pendiente/error)
+  // y de los links de los correos (CU-20).
   FRONTEND_URL: Joi.string().uri().default('http://localhost:5173'),
   PAYMENT_CURRENCY: Joi.string().default('ARS'),
 

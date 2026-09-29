@@ -43,6 +43,18 @@ LOGIN_IP_LOCKOUT_DURATION_MIN=15
 # CU-20: máximo de correos por cuenta y plantilla dentro de la ventana.
 EMAIL_RATE_LIMIT_MAX_PER_HOUR=3
 
+# CU-20: Servicio de Correo. `smtp` apunta por default a Mailpit
+# (`docker compose up -d mailpit`, bandeja en http://localhost:8025).
+# `console` sólo loguea los correos. Para Mailtrap/SendGrid, cambiar host,
+# puerto y credenciales.
+MAIL_PROVIDER=smtp
+SMTP_HOST=localhost
+SMTP_PORT=1025
+SMTP_SECURE=false
+# SMTP_USER=
+# SMTP_PASS=
+MAIL_FROM=Tienda <no-reply@tienda.local>
+
 # CU-03 / CU-05: pasarela de pago. `fake` (default en desarrollo) simula
 # MercadoPago sin credenciales ni túnel: el checkout redirige a una página
 # de pago simulada del frontend que dispara el webhook firmado.
@@ -55,6 +67,7 @@ PAYMENT_GATEWAY=fake
 # /payments/webhook/mercadopago. Sin ella, el pedido se reconcilia por el
 # cron cada 30 min (o al volver de la pasarela, ver CU-05 paso 11).
 # MP_NOTIFICATION_URL=https://xxxx.ngrok-free.app/payments/webhook/mercadopago
+# Base de las páginas de retorno de la pasarela y de los links de los correos.
 FRONTEND_URL=http://localhost:5173
 PAYMENT_CURRENCY=ARS
 

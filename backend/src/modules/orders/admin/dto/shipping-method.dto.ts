@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateIf } from 'class-validator';
+import { ShippingMethodType } from '../../entities/shipping-method.entity.js';
+import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
@@ -29,6 +30,9 @@ export class CreateShippingMethodDto {
   @Min(0, { message: 'El costo no puede ser negativo' })
   @Max(99999999.99)
   cost: number;
+
+  @IsEnum(ShippingMethodType, { message: 'Indicá si es entrega a domicilio o retiro' })
+  type: ShippingMethodType;
 }
 
 export class UpdateShippingMethodDto {
@@ -51,6 +55,10 @@ export class UpdateShippingMethodDto {
   @Min(0, { message: 'El costo no puede ser negativo' })
   @Max(99999999.99)
   cost?: number;
+
+  @ValidateIf(isPresent)
+  @IsEnum(ShippingMethodType, { message: 'Indicá si es entrega a domicilio o retiro' })
+  type?: ShippingMethodType;
 }
 
 export class SetShippingMethodActiveDto {

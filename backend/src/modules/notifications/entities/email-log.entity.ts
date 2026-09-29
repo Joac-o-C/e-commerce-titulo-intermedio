@@ -1,10 +1,6 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
-/**
- * Catálogo de plantillas de correo (CU-20). En esta fase solo se disparan
- * VERIFICACION, RESET_PASSWORD y PASSWORD_CHANGED (CU-01/07/08); el resto
- * se activa en fases posteriores (CU-05, 14, 15, 19, 21, 22).
- */
+/** Catálogo de plantillas de correo (CU-20); el contenido vive en `templates/`. */
 export enum EmailTemplate {
   VERIFICACION = 'verificacion',
   RESET_PASSWORD = 'reset_password',
@@ -19,7 +15,15 @@ export enum EmailTemplate {
   RESULTADO_REEMBOLSO = 'resultado_reembolso',
 }
 
+export interface PendingMessage {
+  subject: string;
+  html: string;
+  text: string;
+}
+
 export enum EmailStatus {
+  /** Aceptado para envío; la entrega al Servicio de Correo corre en segundo plano. */
+  PENDIENTE = 'pendiente',
   ENVIADO = 'enviado',
   FALLIDO = 'fallido',
   REINTENTANDO = 'reintentando',
@@ -34,6 +38,7 @@ export enum EmailStatus {
  */
 @Entity('email_logs')
 @Index(['userId', 'template', 'createdAt'])
+@Index(['status', 'nextAttemptAt'])
 export class EmailLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -55,6 +60,26 @@ export class EmailLog {
 
   @Column({ name: 'related_order_id', type: 'varchar', nullable: true })
   relatedOrderId?: string | null;
+
+  /** Intentos de entrega fallidos por error transitorio (CU-20 flujo 4a). */
+  @Column({ type: 'int', default: 0 })
+  attempts: number;
+
+  @Column({ name: 'next_attempt_at', type: 'timestamptz', nullable: true })
+  nextAttemptAt?: Date | null;
+
+  /**
+   * Mensaje ya compuesto, sólo mientras falta entregarlo: puede llevar un
+   * token de un solo uso, así que se borra al enviarse o al darse por fallido.
+   */
+  @Column({ name: 'pending_message', type: 'jsonb', nullable: true })
+  pendingMessage?: PendingMessage | null;
+
+  @Column({ name: 'last_error', type: 'varchar', nullable: true })
+  lastError?: string | null;
+
+  @Column({ name: 'sent_at', type: 'timestamptz', nullable: true })
+  sentAt?: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -1,12 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { Repository } from 'typeorm';
 import { AppModule } from '../src/app.module.js';
-import { EmailLog, EmailTemplate } from '../src/modules/notifications/entities/email-log.entity.js';
+import { MAIL_PROVIDER } from '../src/modules/notifications/mail-provider.interface.js';
+import { CapturedMail } from './support/captured-mail.js';
 
 /**
  * Flujo de negocio punta a punta de la Fase 1: registro -> verificación de
@@ -16,7 +15,7 @@ import { EmailLog, EmailTemplate } from '../src/modules/notifications/entities/e
  */
 describe('Auth flow (e2e)', () => {
   let app: INestApplication<App>;
-  let emailLogRepo: Repository<EmailLog>;
+  const mail = new CapturedMail();
 
   const email = `e2e-${Date.now()}@example.com`;
   const password = 'Password1';
@@ -24,14 +23,15 @@ describe('Auth flow (e2e)', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(MAIL_PROVIDER)
+      .useValue(mail)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.init();
-
-    emailLogRepo = moduleFixture.get(getRepositoryToken(EmailLog));
   });
 
   afterAll(async () => {
@@ -60,11 +60,7 @@ describe('Auth flow (e2e)', () => {
   });
 
   it('CU-07 verifica la cuenta con el token generado en el registro', async () => {
-    const log = await emailLogRepo.findOne({
-      where: { recipientEmail: email, template: EmailTemplate.VERIFICACION },
-      order: { createdAt: 'DESC' },
-    });
-    const token = (log?.payloadSnapshot as { token: string } | null)?.token;
+    const token = await mail.tokenFor(email, '/verify-email');
     expect(token).toBeTruthy();
 
     await request(app.getHttpServer())

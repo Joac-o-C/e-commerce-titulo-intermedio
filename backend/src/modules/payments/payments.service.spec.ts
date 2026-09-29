@@ -44,6 +44,16 @@ describe('PaymentsService', () => {
   let ledger: { requestRefund: ReturnType<typeof vi.fn> };
   let refunds: { dispatch: ReturnType<typeof vi.fn>; reconcilePayment: ReturnType<typeof vi.fn> };
   const lockedOrder = { id: ORDER_ID, userId: 'user-1', total: '700.00', status: 'pagado', items: [] };
+  const storedOrder = {
+    id: ORDER_ID,
+    orderNumber: 42,
+    shippingCost: '100.00',
+    shippingMethodSnapshot: { id: 'sm-1', name: 'Correo a domicilio', cost: '100.00' },
+    shippingAddressSnapshot: { street: 'Mitre', number: '123', city: 'Rosario', province: 'Santa Fe', postalCode: '2000' },
+    items: [
+      { productNameSnapshot: 'Remera', variantAttributesSnapshot: { talle: 'M', color: 'Negro' }, quantity: 2, subtotal: '600.00' },
+    ],
+  };
 
   const auditedEvents = () => auditRepo.create.mock.calls.map(([data]) => data.eventType);
 
@@ -69,7 +79,13 @@ describe('PaymentsService', () => {
       providers: [
         PaymentsService,
         { provide: PAYMENT_GATEWAY, useValue: gateway },
-        { provide: getDataSourceToken(), useValue: { transaction: (cb: (m: unknown) => unknown) => cb(manager) } },
+        {
+          provide: getDataSourceToken(),
+          useValue: {
+            transaction: (cb: (m: unknown) => unknown) => cb(manager),
+            getRepository: () => ({ findOne: vi.fn().mockResolvedValue(storedOrder) }),
+          },
+        },
         { provide: getRepositoryToken(PaymentAuditLog), useValue: auditRepo },
         { provide: OrdersService, useValue: ordersService },
         { provide: UsersService, useValue: { findById: vi.fn().mockResolvedValue({ email: 'c@example.com' }) } },
@@ -103,9 +119,39 @@ describe('PaymentsService', () => {
       );
       expect(ordersService.applyPaymentOutcome).toHaveBeenCalledWith(manager, expect.anything(), 'aprobado', '123');
       expect(notifications.send).toHaveBeenCalledWith(
-        expect.objectContaining({ template: EmailTemplate.RESULTADO_PAGO, relatedOrderId: ORDER_ID }),
+        expect.objectContaining({ template: EmailTemplate.CONFIRMACION_PEDIDO, relatedOrderId: ORDER_ID }),
       );
       expect(auditedEvents()).toEqual([PaymentAuditEvent.PAGO_PROCESADO]);
+    });
+
+    it('paso 9: el pago aprobado confirma el pedido con su detalle (plantilla confirmacion_pedido)', async () => {
+      await service.handleNotification(signedNotification());
+
+      expect(notifications.send).toHaveBeenCalledOnce();
+      expect(notifications.send.mock.calls[0][0].data).toEqual({
+        orderNumber: 42,
+        items: [{ name: 'Remera', variant: 'M / Negro', quantity: 2, subtotal: '600.00' }],
+        shippingMethod: 'Correo a domicilio',
+        // Snapshot anterior a la Fase 7, sin `type`: se lee como entrega a domicilio.
+        shippingType: 'domicilio',
+        shippingDescription: null,
+        shippingCost: '100.00',
+        shippingAddress: storedOrder.shippingAddressSnapshot,
+        total: '700.00',
+      });
+    });
+
+    it('paso 9: un pago rechazado avisa el resultado del pago (plantilla resultado_pago)', async () => {
+      gateway.getPayment.mockResolvedValue(gatewayPayment({ status: 'rejected' }));
+
+      await service.handleNotification(signedNotification());
+
+      expect(notifications.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: EmailTemplate.RESULTADO_PAGO,
+          data: expect.objectContaining({ orderNumber: 42, resultado: 'rechazado' }),
+        }),
+      );
     });
 
     it('nunca confía en el webhook: el estado sale de la consulta a la pasarela', async () => {

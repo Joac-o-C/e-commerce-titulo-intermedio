@@ -7,6 +7,8 @@ import { App } from 'supertest/types';
 import { Repository } from 'typeorm';
 import { AppModule } from '../src/app.module.js';
 import { EmailLog, EmailTemplate } from '../src/modules/notifications/entities/email-log.entity.js';
+import { MAIL_PROVIDER } from '../src/modules/notifications/mail-provider.interface.js';
+import { CapturedMail } from './support/captured-mail.js';
 import { Order } from '../src/modules/orders/entities/order.entity.js';
 import { OrderStatus } from '../src/modules/orders/order-status.js';
 import { OrdersService } from '../src/modules/orders/orders.service.js';
@@ -29,6 +31,7 @@ describe('Checkout y pago (e2e)', () => {
   let app: INestApplication<App>;
   let http: ReturnType<typeof request>;
   let emailLogRepo: Repository<EmailLog>;
+  const mail = new CapturedMail();
   let variantRepo: Repository<ProductVariant>;
   let productRepo: Repository<Product>;
   let orderRepo: Repository<Order>;
@@ -74,7 +77,10 @@ describe('Checkout y pago (e2e)', () => {
     (await request(app.getHttpServer()).get(`/orders/${orderId}`).set(auth()).expect(200)).body.status;
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(MAIL_PROVIDER)
+      .useValue(mail)
+      .compile();
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
@@ -101,12 +107,9 @@ describe('Checkout y pago (e2e)', () => {
       .post('/auth/register')
       .send({ firstName: 'Ana', lastName: 'Compra', email, password, passwordConfirmation: password, acceptTerms: true })
       .expect(201);
-    const log = await emailLogRepo.findOneOrFail({
-      where: { recipientEmail: email, template: EmailTemplate.VERIFICACION },
-      order: { createdAt: 'DESC' },
-    });
+    const verificationToken = await mail.tokenFor(email, '/verify-email');
     await request(app.getHttpServer())
-      .post(`/auth/verify-email?token=${(log.payloadSnapshot as { token: string }).token}`)
+      .post(`/auth/verify-email?token=${verificationToken}`)
       .expect(200);
     token = (await request(app.getHttpServer()).post('/auth/login').send({ email, password }).expect(200)).body.accessToken;
 
@@ -143,8 +146,10 @@ describe('Checkout y pago (e2e)', () => {
 
     expect(await orderStatus(orderId)).toBe(OrderStatus.PAGADO);
     expect(await stockOf()).toEqual({ total: 8, reserved: 0 });
-    const mails = await emailLogRepo.count({ where: { relatedOrderId: orderId, template: EmailTemplate.RESULTADO_PAGO } });
+    // CU-05 (paso 9): el pago aprobado confirma el pedido (confirmacion_pedido), no manda resultado_pago.
+    const mails = await emailLogRepo.count({ where: { relatedOrderId: orderId, template: EmailTemplate.CONFIRMACION_PEDIDO } });
     expect(mails).toBe(1);
+    await vi.waitFor(() => expect(mail.messages.some((m) => m.to === email && m.subject.startsWith('¡Confirmamos tu pedido'))).toBe(true));
   });
 
   it('CU-05 6a: el mismo webhook repetido por el endpoint real no altera nada', async () => {

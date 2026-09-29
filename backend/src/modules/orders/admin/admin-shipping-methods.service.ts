@@ -23,7 +23,7 @@ export class AdminShippingMethodsService {
 
   async create(dto: CreateShippingMethodDto): Promise<ShippingMethod> {
     return this.saveUnique(
-      this.repo.create({ name: dto.name, description: dto.description || null, cost: dto.cost.toFixed(2), isActive: true }),
+      this.repo.create({ name: dto.name, description: dto.description || null, cost: dto.cost.toFixed(2), type: dto.type, isActive: true }),
     );
   }
 
@@ -31,6 +31,7 @@ export class AdminShippingMethodsService {
     const method = await this.findOrFail(id);
     if (dto.name !== undefined) method.name = dto.name;
     if (dto.description !== undefined) method.description = dto.description || null;
+    if (dto.type !== undefined) method.type = dto.type;
     if (dto.cost !== undefined) method.cost = dto.cost.toFixed(2);
     return this.saveUnique(method);
   }

@@ -5,6 +5,8 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { DataSource, Repository } from 'typeorm';
 import { toCents } from '../../common/money.js';
+import { Order } from '../orders/entities/order.entity.js';
+import { ShippingMethodType } from '../orders/entities/shipping-method.entity.js';
 import { EmailTemplate } from '../notifications/entities/email-log.entity.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import {
@@ -432,6 +434,13 @@ export class PaymentsService {
     }
   }
 
+  /**
+   * CU-05 (paso 9): pago aprobado → confirmación del pedido con su detalle;
+   * rechazado o pendiente → resultado del pago.
+   *
+   * @usecase CU-05 Procesar confirmación de pago
+   * @usecase-includes CU-20
+   */
   private async notifyCustomer(
     orderId: string,
     userId: string,
@@ -441,13 +450,42 @@ export class PaymentsService {
   ): Promise<void> {
     const user = await this.usersService.findById(userId);
     if (!user) return;
+    const order = await this.dataSource.getRepository(Order).findOne({
+      where: { id: orderId },
+      relations: { items: true },
+    });
+    if (!order) return;
     // CU-20 nunca revierte al solicitante: un fallo de correo queda en EmailLog.
+    if (outcome === 'aprobado') {
+      await this.notificationsService.send({
+        userId,
+        recipientEmail: user.email,
+        template: EmailTemplate.CONFIRMACION_PEDIDO,
+        relatedOrderId: orderId,
+        data: {
+          orderNumber: order.orderNumber,
+          items: order.items.map((item) => ({
+            name: item.productNameSnapshot,
+            variant: Object.values(item.variantAttributesSnapshot ?? {}).join(' / '),
+            quantity: item.quantity,
+            subtotal: item.subtotal,
+          })),
+          shippingMethod: order.shippingMethodSnapshot.name,
+          shippingType: order.shippingMethodSnapshot.type ?? ShippingMethodType.DOMICILIO,
+          shippingDescription: order.shippingMethodSnapshot.description ?? null,
+          shippingCost: order.shippingCost,
+          shippingAddress: order.shippingAddressSnapshot,
+          total,
+        },
+      });
+      return;
+    }
     await this.notificationsService.send({
       userId,
       recipientEmail: user.email,
       template: EmailTemplate.RESULTADO_PAGO,
       relatedOrderId: orderId,
-      data: { orderId, resultado: outcome, estadoPedido: orderStatus, total },
+      data: { orderNumber: order.orderNumber, resultado: outcome, estadoPedido: orderStatus, total },
     });
   }
 
