@@ -191,7 +191,7 @@ export class CheckoutService {
       // CU-03 (paso 13): revalidación final contra el catálogo.
       const problems: CheckoutProblem[] = [];
       for (const item of items) {
-        if (!isPurchasable(item.product)) {
+        if (!isPurchasable(item.product, item.variant)) {
           problems.push({ type: 'unavailable', productName: item.product.name });
         } else if (item.product.price !== item.unitPriceSnapshot) {
           problems.push({
@@ -320,10 +320,11 @@ export class CheckoutService {
 
       // CU-03 (paso 13, flujo R): revalidación contra el catálogo vigente.
       const catalog = await this.productsService.findCatalogState(order.items.map((item) => item.productId));
+      const inactiveVariants = await this.productsService.findInactiveVariantIds(order.items.map((item) => item.variantId));
       const problems: CheckoutProblem[] = [];
       for (const item of order.items) {
         const product = catalog.get(item.productId);
-        if (!product || !isPurchasable(product)) {
+        if (!product || !isPurchasable(product) || inactiveVariants.has(item.variantId)) {
           problems.push({ type: 'unavailable', productName: item.productNameSnapshot });
         } else if (toCents(product.price) !== toCents(item.unitPriceSnapshot)) {
           problems.push({

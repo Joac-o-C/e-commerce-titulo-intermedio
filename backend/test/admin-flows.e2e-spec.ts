@@ -3,7 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
-import { App } from 'supertest/types';
+import type { App } from 'supertest/types.js';
 import { Repository } from 'typeorm';
 import { AppModule } from '../src/app.module.js';
 import { EmailLog, EmailTemplate } from '../src/modules/notifications/entities/email-log.entity.js';
@@ -373,5 +373,64 @@ describe('Administración de pedidos, reembolsos y posventa (e2e)', () => {
     await request(server()).post(`/admin/returns/${requestId}/replacement/dispatch`).set(admin()).send({}).expect(409);
     // Aprobación, resolución y despacho de la reposición.
     expect(await emailLogRepo.countBy({ relatedOrderId: orderId, template: EmailTemplate.RESULTADO_POSVENTA })).toBe(3);
+  });
+
+  it('CU-16 3a: edita las variantes de un producto ya vendido sin perder pedidos ni historial', async () => {
+    const stamp = Date.now();
+    const sold = await productRepo.save(
+      productRepo.create({ name: `Producto e2e talles ${stamp}`, description: 'e2e', price: '1000.00', isPublished: true }),
+    );
+    const [s, m, l] = await variantRepo.save(
+      ['S', 'M', 'L'].map((talle, position) =>
+        variantRepo.create({ productId: sold.id, sku: `E2E-TAL-${talle}-${stamp}`, attributes: { Talle: talle }, stockTotal: 10, position }),
+      ),
+    );
+    const orderId = await paidOrder(m, 1);
+    const talles = async () =>
+      (await request(server()).get(`/products/${sold.id}`).expect(200)).body.variants.map(
+        (v: { attributes: Record<string, string> }) => v.attributes.Talle,
+      );
+    expect(await talles()).toEqual(['S', 'M', 'L']);
+
+    const { version } = await productRepo.findOneByOrFail({ id: sold.id });
+    const asInput = (v: ProductVariant, stockTotal = v.stockTotal) => ({ id: v.id, sku: v.sku, attributes: v.attributes, stockTotal });
+    // Reordena (L primero), sube el stock de S, quita M (vendida) y agrega XL al final.
+    await request(server())
+      .patch(`/admin/products/${sold.id}`)
+      .set(admin())
+      .field('version', String(version))
+      .field(
+        'variants',
+        JSON.stringify([asInput(l), asInput(s, 15), { sku: `E2E-TAL-XL-${stamp}`, attributes: { Talle: 'XL' }, stockTotal: 3 }]),
+      )
+      .expect(200);
+
+    expect(await talles()).toEqual(['L', 'S', 'XL']);
+    // M sigue existiendo para su pedido, pero dada de baja.
+    expect(await variantRepo.findOneByOrFail({ id: m.id })).toMatchObject({ isActive: false });
+    await request(server()).get(`/orders/${orderId}`).set(customer()).expect(200);
+    // El cambio de stock quedó en el historial de CU-18, con el Administrador como actor.
+    const history = (await request(server()).get(`/admin/stock/variants/${s.id}/history`).set(admin()).expect(200)).body;
+    expect(history).toEqual([
+      expect.objectContaining({ type: StockMovementType.AJUSTE, quantity: 15, resultingStockTotal: 15, actor: expect.objectContaining({ lastName: 'Admin e2e' }) }),
+    ]);
+    // Una variante dada de baja ya no se puede agregar al carrito.
+    await request(server()).post('/cart/items').set(customer()).send({ variantId: m.id, quantity: 1 }).expect((res) => {
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+
+    // El ABM la muestra entre las dadas de baja y se puede reactivar (vuelve al final).
+    const listed = (await request(server()).get(`/admin/products?search=${encodeURIComponent(sold.name)}`).set(admin()).expect(200)).body
+      .items[0];
+    expect(listed.inactiveVariants.map((v: { id: string }) => v.id)).toEqual([m.id]);
+    const active = listed.variants.map((v: ProductVariant) => asInput(v));
+    await request(server())
+      .patch(`/admin/products/${sold.id}`)
+      .set(admin())
+      .field('version', String(listed.version))
+      .field('variants', JSON.stringify([...active, asInput(listed.inactiveVariants[0])]))
+      .expect(200);
+    expect(await talles()).toEqual(['L', 'S', 'XL', 'M']);
+    await request(server()).post('/cart/items').set(customer()).send({ variantId: m.id, quantity: 1 }).expect(201);
   });
 });

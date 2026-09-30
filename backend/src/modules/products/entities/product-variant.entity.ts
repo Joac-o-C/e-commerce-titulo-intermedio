@@ -20,6 +20,11 @@ import { StockMovement } from './stock-movement.entity.js';
  * producto"). `stockAvailable` (total - reservado) no se persiste: se
  * calcula al leer, porque `stockReserved` lo mueven CU-03/05/14/19/22, no
  * este módulo.
+ *
+ * `position` fija el orden en que el Cliente ve las variantes (CU-09): por
+ * default el de carga, y el Administrador lo cambia desde el ABM (CU-16).
+ * Bajas siempre lógicas (`isActive`): una variante vendida sigue referida
+ * por pedidos, devoluciones e historial de stock.
  */
 @Entity('product_variants')
 export class ProductVariant {
@@ -38,6 +43,12 @@ export class ProductVariant {
 
   @Column({ type: 'jsonb', default: {} })
   attributes: Record<string, string>;
+
+  @Column({ type: 'int', default: 0 })
+  position: number;
+
+  @Column({ name: 'is_active', default: true })
+  isActive: boolean;
 
   @Column({ name: 'stock_total', type: 'int', default: 0 })
   stockTotal: number;

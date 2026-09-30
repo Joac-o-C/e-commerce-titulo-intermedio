@@ -51,6 +51,7 @@ back:
 --npm install (la primera vez)
 --cp envExample .env (si no tenés el .env)
 --npm run migration:run (corre migraciones pendientes)
+--npm run seed (opcional: carga el catálogo de demo y el admin; antes completar SEED_ADMIN_EMAIL y SEED_ADMIN_PASSWORD en el .env. Se puede correr más de una vez sin duplicar nada)
 --npm run start:dev (arranca todo)
 
 front: 
@@ -65,5 +66,11 @@ Direcciones:
 - Mailpit: http://localhost:8025. Bandeja donde llegan todos los correos que manda el backend (verificación, reset, pedidos...).
 
 tests:
-unitarios: npm test 
-end to end: npm run test:e2e (necesitan la base levantada)
+back:
+- unitarios: npm test
+- end to end: npm run test:e2e (necesitan la base levantada; escriben en la misma base de desarrollo)
+- tipos (incluye los tests): npm run typecheck
+front:
+- unitarios: npm test
+
+CI: en cada push y pull request, GitHub Actions (.github/workflows/ci.yml) corre en los dos proyectos build, lint y tests; en el back además el typecheck, las migraciones, el seed y los e2e contra un Postgres propio.

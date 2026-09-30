@@ -4,7 +4,7 @@ import { adminProductsService } from '../../services/admin-products.service'
 import { adminCategoriesService } from '../../services/admin-categories.service'
 import { Table } from '../../components/ui/Table'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
-import type { AdminProduct, ProductFormInput, VariantInput } from '../../types/product.types'
+import type { AdminProduct, AdminProductVariant, ProductFormInput, VariantInput } from '../../types/product.types'
 import type { CategoryNode } from '../../types/category.types'
 
 function extractErrorMessage(err: unknown, fallback: string): string {
@@ -19,13 +19,35 @@ function flattenCategories(tree: CategoryNode[]): CategoryNode[] {
 }
 
 interface VariantRow {
+  /** Clave estable de la fila en el formulario (las filas se reordenan). */
+  key: string
+  /** Variante existente (edición); undefined si es nueva. */
+  id?: string
   sku: string
   attributeKey: string
   attributeValue: string
   stockTotal: number
 }
 
-const emptyVariant: VariantRow = { sku: '', attributeKey: '', attributeValue: '', stockTotal: 0 }
+function toVariantRow(v: AdminProductVariant): VariantRow {
+  const [attributeKey, attributeValue] = Object.entries(v.attributes)[0] ?? ['', '']
+  return { key: v.id, id: v.id, sku: v.sku, attributeKey, attributeValue, stockTotal: v.stockTotal }
+}
+
+function formatVariantAttributes(attributes: Record<string, string>): string {
+  return Object.entries(attributes)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(' · ')
+}
+
+let nextRowKey = 0
+const newVariantRow = (): VariantRow => ({
+  key: `nueva-${nextRowKey++}`,
+  sku: '',
+  attributeKey: '',
+  attributeValue: '',
+  stockTotal: 0,
+})
 
 interface FormState {
   name: string
@@ -46,13 +68,16 @@ const emptyForm: FormState = {
   categoryIds: [],
   isPublished: false,
   lowStockThreshold: '',
-  variants: [{ ...emptyVariant }],
+  variants: [newVariantRow()],
 }
 
 function toFormInput(form: FormState): ProductFormInput {
+  // Una fila nueva sin SKU se ignora; una existente siempre viaja (si no,
+  // el backend la daría de baja) y el backend valida su SKU.
   const variants: VariantInput[] = form.variants
-    .filter((v) => v.sku.trim() !== '')
+    .filter((v) => v.id || v.sku.trim() !== '')
     .map((v) => ({
+      id: v.id,
       sku: v.sku,
       stockTotal: v.stockTotal,
       attributes: v.attributeKey ? { [v.attributeKey]: v.attributeValue } : {},
@@ -157,10 +182,7 @@ export function AdminProducts() {
       categoryIds: product.categories.map((c) => c.id),
       isPublished: product.isPublished,
       lowStockThreshold: product.lowStockThreshold?.toString() ?? '',
-      variants: product.variants.map((v) => {
-        const [attributeKey, attributeValue] = Object.entries(v.attributes)[0] ?? ['', '']
-        return { sku: v.sku, attributeKey, attributeValue, stockTotal: v.stockTotal }
-      }),
+      variants: product.variants.map(toVariantRow),
     })
     setShowForm(true)
   }
@@ -191,6 +213,29 @@ export function AdminProducts() {
       variants: f.variants.map((v, i) => (i === index ? { ...v, ...patch } : v)),
     }))
   }
+
+  /** El orden de la lista es el orden en que el Cliente ve las variantes. */
+  const moveVariant = (index: number, delta: -1 | 1) => {
+    setForm((f) => {
+      const variants = [...f.variants]
+      const target = index + delta
+      if (target < 0 || target >= variants.length) return f
+      ;[variants[index], variants[target]] = [variants[target], variants[index]]
+      return { ...f, variants }
+    })
+  }
+
+  const removeVariant = (index: number) => {
+    setForm((f) => ({ ...f, variants: f.variants.filter((_, i) => i !== index) }))
+  }
+
+  /** Vuelve a la lista (al final) una variante dada de baja; se guarda con el resto. */
+  const reactivateVariant = (variant: AdminProductVariant) => {
+    setForm((f) => ({ ...f, variants: [...f.variants, toVariantRow(variant)] }))
+  }
+
+  const inactiveVariants =
+    editing?.inactiveVariants.filter((v) => !form.variants.some((row) => row.id === v.id)) ?? []
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -311,43 +356,102 @@ export function AdminProducts() {
           <div>
             <p className="mb-1 text-sm font-medium text-neutral-700">Variantes</p>
             {form.variants.map((v, i) => (
-              <div key={i} className="mb-2 grid grid-cols-4 gap-2">
+              <div
+                key={v.key}
+                className="mb-2 grid grid-cols-2 gap-2 border-b border-neutral-200 pb-2 sm:grid-cols-[repeat(4,minmax(0,1fr))_auto] sm:border-0 sm:pb-0"
+              >
                 <input
                   value={v.sku}
                   onChange={(e) => updateVariant(i, { sku: e.target.value })}
                   placeholder="SKU"
+                  aria-label="SKU"
                   className="rounded border border-neutral-300 px-2 py-1"
                 />
                 <input
                   value={v.attributeKey}
                   onChange={(e) => updateVariant(i, { attributeKey: e.target.value })}
                   placeholder="Atributo (ej. Talle)"
+                  aria-label="Atributo"
                   className="rounded border border-neutral-300 px-2 py-1"
                 />
                 <input
                   value={v.attributeValue}
                   onChange={(e) => updateVariant(i, { attributeValue: e.target.value })}
                   placeholder="Valor (ej. M)"
+                  aria-label="Valor"
                   className="rounded border border-neutral-300 px-2 py-1"
                 />
                 <input
                   type="number"
                   value={v.stockTotal}
                   onChange={(e) => updateVariant(i, { stockTotal: Number(e.target.value) })}
-                  placeholder="Stock inicial"
+                  placeholder={v.id ? 'Stock total' : 'Stock inicial'}
+                  aria-label={v.id ? 'Stock total' : 'Stock inicial'}
                   className="rounded border border-neutral-300 px-2 py-1"
                 />
+                <div className="col-span-2 flex justify-end gap-1 sm:col-span-1">
+                  <button
+                    type="button"
+                    onClick={() => moveVariant(i, -1)}
+                    disabled={i === 0}
+                    aria-label="Subir variante"
+                    className="rounded border border-neutral-300 px-2 py-1 text-sm disabled:opacity-40"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveVariant(i, 1)}
+                    disabled={i === form.variants.length - 1}
+                    aria-label="Bajar variante"
+                    className="rounded border border-neutral-300 px-2 py-1 text-sm disabled:opacity-40"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeVariant(i)}
+                    disabled={form.variants.length === 1}
+                    aria-label="Quitar variante"
+                    className="rounded border border-neutral-300 px-2 py-1 text-sm text-red-700 disabled:opacity-40"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             ))}
             <button
               type="button"
               className="text-sm underline"
-              onClick={() => setForm((f) => ({ ...f, variants: [...f.variants, { ...emptyVariant }] }))}
+              onClick={() => setForm((f) => ({ ...f, variants: [...f.variants, newVariantRow()] }))}
             >
               + Agregar variante
             </button>
+            {inactiveVariants.length > 0 && (
+              <div className="mt-3">
+                <p className="mb-1 text-sm font-medium text-neutral-700">Dadas de baja</p>
+                {inactiveVariants.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between gap-2 py-1 text-sm">
+                    <span className="text-neutral-600">
+                      {v.sku}
+                      {Object.keys(v.attributes).length > 0 && ` — ${formatVariantAttributes(v.attributes)}`} · stock{' '}
+                      {v.stockTotal}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => reactivateVariant(v)}
+                      className="rounded border border-neutral-300 px-2 py-1"
+                    >
+                      Reactivar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <p className="mt-1 text-xs text-neutral-500">
-              Si no cargás ninguna, se crea una variante única sin atributos.
+              {editing
+                ? 'El orden de la lista es el que ve el cliente. Quitar una variante la da de baja (se conserva en los pedidos) y cambiar su stock queda registrado como ajuste en el historial de stock.'
+                : 'El orden de la lista es el que ve el cliente. Si no cargás ninguna, se crea una variante única sin atributos.'}
             </p>
           </div>
 

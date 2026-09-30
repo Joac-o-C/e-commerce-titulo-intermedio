@@ -75,6 +75,8 @@ export interface AdminProductVariant {
   attributes: Record<string, string>
   stockTotal: number
   stockReserved: number
+  /** Orden en que el Cliente ve las variantes (CU-09); el ABM ya las devuelve ordenadas. */
+  position: number
 }
 
 export interface AdminProduct {
@@ -88,6 +90,8 @@ export interface AdminProduct {
   lowStockThreshold: number | null
   categories: ProductCategoryRef[]
   variants: AdminProductVariant[]
+  /** Dadas de baja al editar (CU-16); se pueden reactivar desde el formulario. */
+  inactiveVariants: AdminProductVariant[]
   images: ProductImage[]
   version: number
   createdAt: string
@@ -101,6 +105,8 @@ export interface AdminProductListPage {
 }
 
 export interface VariantInput {
+  /** Sólo al editar: variante existente. Sin `id` es nueva; las existentes que no vienen se dan de baja. */
+  id?: string
   sku: string
   attributes?: Record<string, string>
   stockTotal: number

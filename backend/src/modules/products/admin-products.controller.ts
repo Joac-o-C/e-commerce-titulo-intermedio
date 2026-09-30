@@ -17,6 +17,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { UserRole } from '../users/entities/user.entity.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import type { JwtAccessPayload } from '../auth/strategies/jwt.strategy.js';
 import { ProductsService } from './products.service.js';
 import { CreateProductDto } from './dto/create-product.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
@@ -63,8 +65,13 @@ export class AdminProductsController {
   /** @usecase CU-16 ABM de productos (flujo 3a: editar) */
   @Patch(':id')
   @UseInterceptors(FilesInterceptor('images', 8, IMAGE_UPLOAD_OPTIONS))
-  update(@Param('id') id: string, @Body() dto: UpdateProductDto, @UploadedFiles() images: Express.Multer.File[]) {
-    return this.productsService.update(id, dto, images);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateProductDto,
+    @UploadedFiles() images: Express.Multer.File[],
+    @CurrentUser() user: JwtAccessPayload,
+  ) {
+    return this.productsService.update(id, dto, images, user.sub);
   }
 
   /** @usecase CU-16 ABM de productos (flujo 3b: publicar/despublicar) */

@@ -73,3 +73,9 @@ PAYMENT_CURRENCY=ARS
 
 # CU-03 (18a): vencimiento de la reserva de stock de un pedido impago.
 ORDER_RESERVATION_TTL_HOURS=24
+
+# Datos de demo (`npm run seed`): credenciales del Administrador que crea el
+# seed. La contraseña tiene que cumplir la política (8+ caracteres, una
+# mayúscula y un número). Si el email ya existe, el seed no lo modifica.
+SEED_ADMIN_EMAIL=admin@tienda.local
+SEED_ADMIN_PASSWORD=

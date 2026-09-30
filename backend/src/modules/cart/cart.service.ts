@@ -264,8 +264,8 @@ export class CartService {
     for (const item of items) {
       const base = { itemId: item.id, productName: item.product.name };
 
-      if (!isPurchasable(item.product)) {
-        // CU-03 (flujo 3a): producto dado de baja o despublicado.
+      if (!isPurchasable(item.product, item.variant)) {
+        // CU-03 (flujo 3a): producto (o variante) dado de baja, o despublicado.
         await this.itemRepo.remove(item);
         adjustments.push({ ...base, type: 'removed', reason: 'unavailable' });
         continue;
@@ -378,7 +378,7 @@ export class CartService {
   }
 
   private toItemView(item: CartItem): CartItemView {
-    const isUnavailable = !isPurchasable(item.variant.product);
+    const isUnavailable = !isPurchasable(item.variant.product, item.variant);
     const isOutOfStock = !isUnavailable && item.variant.stockAvailable <= 0;
     const currentPrice = item.product.price;
     return {

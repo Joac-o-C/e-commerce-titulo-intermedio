@@ -44,7 +44,7 @@ const cartItem = (overrides: { price?: string; snapshot?: string; isPublished?: 
   quantity: overrides.quantity ?? 2,
   unitPriceSnapshot: overrides.snapshot ?? '100.00',
   product: { id: 'product-1', name: 'Remera', price: overrides.price ?? '100.00', isActive: true, isPublished: overrides.isPublished ?? true },
-  variant: { id: 'variant-1', attributes: { talle: 'M' } },
+  variant: { id: 'variant-1', attributes: { talle: 'M' }, isActive: true },
 });
 
 describe('CheckoutService', () => {
@@ -61,7 +61,7 @@ describe('CheckoutService', () => {
   let stockReservation: { reserve: ReturnType<typeof vi.fn> };
   let ordersService: Record<string, ReturnType<typeof vi.fn>>;
   let gateway: { createPreference: ReturnType<typeof vi.fn>; expirePreference: ReturnType<typeof vi.fn> };
-  let productsService: { findCatalogState: ReturnType<typeof vi.fn> };
+  let productsService: { findCatalogState: ReturnType<typeof vi.fn>; findInactiveVariantIds: ReturnType<typeof vi.fn> };
 
   const confirmDto = { addressId: 'addr-1', shippingMethodId: 'ship-1', expectedTotal: '700.00' };
 
@@ -97,6 +97,7 @@ describe('CheckoutService', () => {
       findCatalogState: vi
         .fn()
         .mockResolvedValue(new Map([['product-1', { isActive: true, isPublished: true, price: '100.00' }]])),
+      findInactiveVariantIds: vi.fn().mockResolvedValue(new Set()),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -342,6 +343,16 @@ describe('CheckoutService', () => {
       const error = await service.retryPayment('user-1', 'order-1').catch((e) => e);
       expect(error).toBeInstanceOf(PaymentRetryStaleException);
       expect(error.problems).toEqual([expect.objectContaining({ type: 'price_changed', to: '120.00' })]);
+      expect(stockReservation.reserve).not.toHaveBeenCalled();
+    });
+
+    it('13a: no reintenta si la variante pedida se dio de baja (CU-16)', async () => {
+      ordersService.lockWithItems.mockResolvedValue(orderToRetry());
+      productsService.findInactiveVariantIds.mockResolvedValue(new Set(['variant-1']));
+
+      const error = await service.retryPayment('user-1', 'order-1').catch((e) => e);
+      expect(error).toBeInstanceOf(PaymentRetryStaleException);
+      expect(error.problems).toEqual([expect.objectContaining({ type: 'unavailable' })]);
       expect(stockReservation.reserve).not.toHaveBeenCalled();
     });
 

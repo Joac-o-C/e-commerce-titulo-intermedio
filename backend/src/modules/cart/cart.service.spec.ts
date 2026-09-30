@@ -26,7 +26,9 @@ const baseVariant = (overrides: Record<string, unknown> = {}) => ({
   attributes: {},
   stockTotal: 10,
   stockReserved: 0,
-  get stockAvailable() {
+  position: 0,
+  isActive: true,
+  get stockAvailable(): number {
     return (this.stockTotal as number) - (this.stockReserved as number);
   },
   ...overrides,
@@ -253,7 +255,7 @@ describe('CartService', () => {
   });
 
   describe('CU-03 Realizar checkout (revalidación del carrito)', () => {
-    const cartItem = (overrides: { quantity?: number; unitPriceSnapshot?: string; product?: object; variant?: object } = {}) => ({
+    const cartItem = (overrides: { quantity?: number; unitPriceSnapshot?: string; product?: Record<string, unknown>; variant?: Record<string, unknown> } = {}) => ({
       id: 'item-1',
       cartId: 'cart-1',
       quantity: overrides.quantity ?? 2,
@@ -276,6 +278,15 @@ describe('CartService', () => {
 
     it('3a: quita el ítem dado de baja o despublicado', async () => {
       itemRepo.find.mockResolvedValueOnce([cartItem({ product: { isPublished: false } })]);
+
+      const { adjustments } = await service.revalidateForCheckout('user-1');
+
+      expect(itemRepo.remove).toHaveBeenCalled();
+      expect(adjustments).toEqual([expect.objectContaining({ type: 'removed', reason: 'unavailable' })]);
+    });
+
+    it('3a: quita el ítem cuya variante se dio de baja al editar el producto (CU-16)', async () => {
+      itemRepo.find.mockResolvedValueOnce([cartItem({ variant: { isActive: false } })]);
 
       const { adjustments } = await service.revalidateForCheckout('user-1');
 

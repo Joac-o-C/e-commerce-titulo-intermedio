@@ -96,39 +96,41 @@ export function AdminReturnDetail() {
             ))}
           </div>
         )}
-        <table className="mt-3 w-full text-left">
-          <thead className="text-neutral-500">
-            <tr>
-              <th className="py-1 font-medium">Producto</th>
-              <th className="py-1 text-right font-medium">Compradas</th>
-              <th className="py-1 text-right font-medium">Pedidas</th>
-              <th className="py-1 text-right font-medium">Aprobadas</th>
-              <th className="py-1 text-right font-medium">Recibidas</th>
-            </tr>
-          </thead>
-          <tbody>
-            {request.items.map((item) => (
-              <tr key={item.orderItemId} className="border-t border-neutral-100">
-                <td className="py-1.5">
-                  {item.productName}
-                  <span className="block text-xs text-neutral-500">
-                    {[formatAttributes(item.variantAttributes), `$${item.unitPrice} c/u`].filter(Boolean).join(' · ')}
-                  </span>
-                  {item.condition && (
-                    <span className="block text-xs text-neutral-500">
-                      {RETURN_CONDITION_LABELS[item.condition]}
-                      {item.refundApproved !== null && (item.refundApproved ? ' · se reembolsa' : ' · no se reembolsa')}
-                    </span>
-                  )}
-                </td>
-                <td className="py-1.5 text-right">{item.purchased}</td>
-                <td className="py-1.5 text-right">{item.quantityRequested}</td>
-                <td className="py-1.5 text-right">{item.quantityApproved ?? '—'}</td>
-                <td className="py-1.5 text-right">{item.quantityReceived ?? '—'}</td>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="text-neutral-500">
+              <tr>
+                <th className="py-1 font-medium">Producto</th>
+                <th className="whitespace-nowrap py-1 pl-4 text-right font-medium">Compradas</th>
+                <th className="whitespace-nowrap py-1 pl-4 text-right font-medium">Pedidas</th>
+                <th className="whitespace-nowrap py-1 pl-4 text-right font-medium">Aprobadas</th>
+                <th className="whitespace-nowrap py-1 pl-4 text-right font-medium">Recibidas</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {request.items.map((item) => (
+                <tr key={item.orderItemId} className="border-t border-neutral-100">
+                  <td className="py-1.5">
+                    {item.productName}
+                    <span className="block text-xs text-neutral-500">
+                      {[formatAttributes(item.variantAttributes), `$${item.unitPrice} c/u`].filter(Boolean).join(' · ')}
+                    </span>
+                    {item.condition && (
+                      <span className="block text-xs text-neutral-500">
+                        {RETURN_CONDITION_LABELS[item.condition]}
+                        {item.refundApproved !== null && (item.refundApproved ? ' · se reembolsa' : ' · no se reembolsa')}
+                      </span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">{item.purchased}</td>
+                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">{item.quantityRequested}</td>
+                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">{item.quantityApproved ?? '—'}</td>
+                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">{item.quantityReceived ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {request.resolutionNote && <p className="mt-3 text-neutral-700">Respuesta al Cliente: {request.resolutionNote}</p>}
         {request.internalNote && (
           <p className="mt-1 whitespace-pre-line text-neutral-500">Nota interna: {request.internalNote}</p>

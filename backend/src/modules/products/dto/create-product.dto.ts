@@ -17,7 +17,7 @@ import { CreateVariantDto } from './create-variant.dto.js';
  * Parsea un campo que puede llegar como JSON string (multipart/form-data,
  * ver AdminProductsController) o ya como array/objeto (JSON body normal).
  */
-function parseIfJsonString(value: unknown): unknown {
+export function parseIfJsonString(value: unknown): unknown {
   if (typeof value !== 'string') return value;
   try {
     return JSON.parse(value);

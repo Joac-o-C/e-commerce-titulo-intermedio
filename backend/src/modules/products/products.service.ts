@@ -11,19 +11,26 @@ import {
 } from 'typeorm';
 import { CategoriesService } from './categories/categories.service.js';
 import { CreateProductDto } from './dto/create-product.dto.js';
-import { CreateVariantDto } from './dto/create-variant.dto.js';
+import { CreateVariantDto, UpdateVariantDto } from './dto/create-variant.dto.js';
 import { QueryAdminProductsDto } from './dto/query-admin-products.dto.js';
 import { ProductSort, QueryProductsDto } from './dto/query-products.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
 import { Product } from './entities/product.entity.js';
 import { ProductImage } from './entities/product-image.entity.js';
 import { ProductVariant } from './entities/product-variant.entity.js';
-import { isPurchasable } from './purchasable.js';
+import { StockMovement, StockMovementType } from './entities/stock-movement.entity.js';
+import { activeVariantsInOrder, isPurchasable } from './purchasable.js';
 import { STORAGE_SERVICE, type StorageService } from '../../providers/storage/storage.interface.js';
 
 /** CU-18: umbral de stock bajo por defecto cuando el producto no fija uno propio. */
 export const DEFAULT_LOW_STOCK_THRESHOLD = 5;
 const CATALOG_PAGE_SIZE = 24;
+
+/**
+ * Producto tal como lo ve el ABM (CU-16): `variants` son las vigentes en su
+ * orden, e `inactiveVariants` las dadas de baja, que se pueden reactivar.
+ */
+export type AdminProductView = Product & { inactiveVariants: ProductVariant[] };
 
 export interface ProductAvailability {
   stockAvailable: number;
@@ -104,7 +111,7 @@ export class ProductsService {
     return {
       ...this.toPublicSummary(product),
       description: product.description,
-      variants: product.variants.map((v) => ({
+      variants: activeVariantsInOrder(product.variants).map((v) => ({
         id: v.id,
         sku: v.sku,
         attributes: v.attributes,
@@ -121,7 +128,7 @@ export class ProductsService {
    * una implícita (CU-09, flujo 3a).
    * @usecase CU-16 ABM de productos
    */
-  async create(dto: CreateProductDto, images: Express.Multer.File[]): Promise<Product> {
+  async create(dto: CreateProductDto, images: Express.Multer.File[]): Promise<AdminProductView> {
     if (!images || images.length === 0) {
       // CU-16 (flujo 6a): al menos una imagen es obligatoria.
       throw new BadRequestException('El producto debe tener al menos una imagen');
@@ -152,21 +159,21 @@ export class ProductsService {
         );
         await manager.save(ProductImage, imageEntities);
 
-        const variantEntities = variantsInput.map((v) =>
+        const variantEntities = variantsInput.map((v, position) =>
           manager.create(ProductVariant, {
             productId: saved.id,
             sku: v.sku,
             attributes: v.attributes ?? {},
             stockTotal: v.stockTotal,
+            position,
           }),
         );
         await this.saveVariantsOrFail(manager, variantEntities);
 
-        const full = await manager.findOne(Product, {
+        return this.toAdminView((await manager.findOne(Product, {
           where: { id: saved.id },
           relations: { categories: true, variants: true, images: true },
-        });
-        return full!;
+        }))!);
       });
     } catch (err) {
       await Promise.all(uploaded.map((u) => this.storageService.remove(u.url)));
@@ -175,13 +182,14 @@ export class ProductsService {
   }
 
   /**
-   * CU-16 (flujo 3a: editar). No toca variantes/imágenes existentes salvo
-   * que vengan nuevas imágenes (se agregan a las ya existentes) o una lista
-   * de variantes (reemplaza la anterior por completo — simplificación
-   * razonable para el alcance del TP, documentada acá).
+   * CU-16 (flujo 3a: editar). Las imágenes nuevas se agregan a las
+   * existentes. Si viene la lista de variantes, se sincroniza en su lugar
+   * (ver `syncVariants`): nunca se borran filas, porque pedidos,
+   * devoluciones e historial de stock las referencian.
    * @usecase CU-16 ABM de productos
+   * @usecase-includes CU-18 (ajuste de stock desde la edición)
    */
-  async update(id: string, dto: UpdateProductDto, newImages: Express.Multer.File[] = []): Promise<Product> {
+  async update(id: string, dto: UpdateProductDto, newImages: Express.Multer.File[] = [], actorId: string | null = null): Promise<AdminProductView> {
     const product = await this.findOneForAdminOrFail(id);
 
     // CU-16 (flujo 2a): edición concurrente.
@@ -218,20 +226,7 @@ export class ProductsService {
       }
 
       if (dto.variants && dto.variants.length > 0) {
-        await this.assertSkusAvailable(
-          dto.variants.map((v) => v.sku),
-          id,
-        );
-        await manager.delete(ProductVariant, { productId: id });
-        const variantEntities = dto.variants.map((v) =>
-          manager.create(ProductVariant, {
-            productId: id,
-            sku: v.sku,
-            attributes: v.attributes ?? {},
-            stockTotal: v.stockTotal,
-          }),
-        );
-        await this.saveVariantsOrFail(manager, variantEntities);
+        await this.syncVariants(manager, id, dto.variants, actorId);
       }
 
       if (newImages.length > 0) {
@@ -243,11 +238,117 @@ export class ProductsService {
         await manager.save(ProductImage, imageEntities);
       }
 
-      const full = await manager.findOne(Product, {
+      return this.toAdminView((await manager.findOne(Product, {
         where: { id: saved.id },
         relations: { categories: true, variants: true, images: true },
-      });
-      return full!;
+      }))!);
+    });
+  }
+
+  /**
+   * CU-16 (flujo 3a): lleva las variantes del producto a la lista editada.
+   * - Con `id`: se actualiza en su lugar (SKU, atributos, posición). Si el
+   *   stock total cambia, queda un movimiento "ajuste" con el Administrador
+   *   como actor, con la misma regla que CU-18 (flujo 6b): nunca por debajo
+   *   de lo reservado.
+   * - Sin `id`: variante nueva, con su stock inicial (igual que en el alta).
+   * - Las vigentes que no vienen: baja lógica, salvo que tengan stock
+   *   reservado por pedidos en curso (mismo criterio que la baja de producto).
+   * - Una dada de baja que vuelve a venir en la lista (con su `id`) se
+   *   reactiva, conservando su historial y su SKU.
+   * La posición de cada una es su índice en la lista.
+   * @usecase CU-16 ABM de productos
+   */
+  private async syncVariants(
+    manager: EntityManager,
+    productId: string,
+    input: UpdateVariantDto[],
+    actorId: string | null,
+  ): Promise<void> {
+    const current = await manager.find(ProductVariant, {
+      where: { productId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    const byId = new Map(current.map((v) => [v.id, v]));
+
+    const keptIds = input.flatMap((v) => (v.id ? [v.id] : []));
+    if (new Set(keptIds).size !== keptIds.length) {
+      throw new BadRequestException('Una variante aparece repetida en la lista');
+    }
+    if (keptIds.some((variantId) => !byId.has(variantId))) {
+      throw new ConflictException('Una de las variantes ya no existe; recargá los datos e intentá de nuevo');
+    }
+    await this.assertSkusAvailable(
+      input.map((v) => v.sku),
+      productId,
+    );
+    // Nueva con el SKU de una dada de baja del mismo producto: se reactiva
+    // esa (desde "Dadas de baja"), no se crea otra.
+    const newSkus = new Set(input.filter((v) => !v.id).map((v) => v.sku));
+    const clash = current.find((v) => !v.isActive && newSkus.has(v.sku));
+    if (clash) {
+      throw new BadRequestException(
+        `El SKU "${clash.sku}" es de una variante dada de baja: reactivala desde "Dadas de baja" en vez de crear una nueva`,
+      );
+    }
+
+    const removed = current.filter((v) => v.isActive && !keptIds.includes(v.id));
+    const reserved = removed.find((v) => v.stockReserved > 0);
+    if (reserved) {
+      throw new BadRequestException(
+        `No se puede quitar la variante ${this.variantLabel(reserved)}: tiene stock reservado por pedidos en curso`,
+      );
+    }
+    for (const variant of removed) variant.isActive = false;
+
+    const movements: StockMovement[] = [];
+    const upserts = input.map((v, position) => {
+      const existing = v.id ? byId.get(v.id) : undefined;
+      if (!existing) {
+        return manager.create(ProductVariant, {
+          productId,
+          sku: v.sku,
+          attributes: v.attributes ?? {},
+          stockTotal: v.stockTotal,
+          position,
+        });
+      }
+      if (v.stockTotal !== existing.stockTotal) {
+        if (v.stockTotal < existing.stockReserved) {
+          throw new BadRequestException(
+            `El stock total de la variante ${this.variantLabel(existing)} (${v.stockTotal}) no puede quedar por debajo del reservado (${existing.stockReserved})`,
+          );
+        }
+        movements.push(
+          manager.create(StockMovement, {
+            variantId: existing.id,
+            type: StockMovementType.AJUSTE,
+            quantity: v.stockTotal,
+            resultingStockTotal: v.stockTotal,
+            reason: 'Ajuste desde la edición del producto',
+            actorId,
+          }),
+        );
+      }
+      Object.assign(existing, { sku: v.sku, attributes: v.attributes ?? {}, stockTotal: v.stockTotal, position, isActive: true });
+      return existing;
+    });
+
+    // Salvaguarda del UNIQUE de `sku` (carreras): saveVariantsOrFail la traduce a un 400.
+    await this.saveVariantsOrFail(manager, [...removed, ...upserts]);
+    if (movements.length > 0) await manager.save(StockMovement, movements);
+  }
+
+  private variantLabel(variant: ProductVariant): string {
+    const attributes = Object.values(variant.attributes).join(' / ');
+    return attributes ? `"${attributes}" (${variant.sku})` : `"${variant.sku}"`;
+  }
+
+  private toAdminView(product: Product): AdminProductView {
+    const all = product.variants;
+    product.variants = activeVariantsInOrder(all);
+    return Object.assign(product, {
+      inactiveVariants: all.filter((v) => !v.isActive).sort((a, b) => a.sku.localeCompare(b.sku)),
     });
   }
 
@@ -320,17 +421,16 @@ export class ProductsService {
       order: { createdAt: 'DESC' },
     });
 
-    return { items, total, hasMore: offset + items.length < total };
+    return { items: items.map((p) => this.toAdminView(p)), total, hasMore: offset + items.length < total };
   }
 
   /**
-   * Placeholder pensado para Fase 3+ (`cart`/`orders`): resuelve una
-   * variante para una compra, validando que el producto siga
-   * publicado/activo. No se llama todavía desde ningún módulo.
+   * Resuelve una variante para una compra (carrito, CU-02/11), validando
+   * que el producto siga publicado/activo y la variante no esté dada de baja.
    */
   async resolveVariantForPurchase(variantId: string): Promise<{ product: Product; variant: ProductVariant }> {
     const variant = await this.variantRepo.findOne({ where: { id: variantId }, relations: { product: true } });
-    if (!variant || !isPurchasable(variant.product)) {
+    if (!variant || !isPurchasable(variant.product, variant)) {
       throw new NotFoundException('La variante solicitada no está disponible');
     }
     return { product: variant.product, variant };
@@ -349,6 +449,16 @@ export class ProductsService {
     return new Map(products.map((p) => [p.id, p]));
   }
 
+  /** Variantes (de las pedidas) dadas de baja en CU-16, para la misma revalidación. */
+  async findInactiveVariantIds(variantIds: string[]): Promise<Set<string>> {
+    if (variantIds.length === 0) return new Set();
+    const variants = await this.variantRepo.find({
+      select: { id: true },
+      where: { id: In(variantIds), isActive: false },
+    });
+    return new Set(variants.map((v) => v.id));
+  }
+
   /**
    * CU-22 (flujo 10a): variantes entre las que el Administrador elige la
    * reposición de un cambio — las del mismo producto, con su disponible.
@@ -358,8 +468,8 @@ export class ProductsService {
   async findReplacementOptions(productIds: string[]) {
     if (productIds.length === 0) return new Map<string, { id: string; attributes: Record<string, string>; stockAvailable: number }[]>();
     const variants = await this.variantRepo.find({
-      where: { productId: In(productIds), product: { isActive: true } },
-      order: { sku: 'ASC' },
+      where: { productId: In(productIds), isActive: true, product: { isActive: true } },
+      order: { position: 'ASC' },
     });
     const byProduct = new Map<string, { id: string; attributes: Record<string, string>; stockAvailable: number }[]>();
     for (const v of variants) {
@@ -381,7 +491,7 @@ export class ProductsService {
       // CU-04: búsqueda por nombre, descripción, marca o SKU de variante.
       qb.andWhere(
         `(product.name ILIKE :search OR product.description ILIKE :search OR product.brand ILIKE :search
-          OR EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = product.id AND pv.sku ILIKE :search))`,
+          OR EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = product.id AND pv.is_active AND pv.sku ILIKE :search))`,
         { search: `%${query.search}%` },
       );
     }
@@ -437,11 +547,11 @@ export class ProductsService {
   }
 
   private stockAvailableExpr(): string {
-    return '(SELECT COALESCE(SUM(v.stock_total - v.stock_reserved), 0) FROM product_variants v WHERE v.product_id = product.id)';
+    return '(SELECT COALESCE(SUM(v.stock_total - v.stock_reserved), 0) FROM product_variants v WHERE v.product_id = product.id AND v.is_active)';
   }
 
   private toPublicSummary(product: Product) {
-    const totalAvailable = product.variants.reduce((sum, v) => sum + v.stockAvailable, 0);
+    const totalAvailable = activeVariantsInOrder(product.variants).reduce((sum, v) => sum + v.stockAvailable, 0);
     const threshold = product.lowStockThreshold ?? DEFAULT_LOW_STOCK_THRESHOLD;
     return {
       id: product.id,

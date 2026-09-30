@@ -37,7 +37,8 @@ export class StockService {
     const qb = this.variantRepo
       .createQueryBuilder('variant')
       .innerJoinAndSelect('variant.product', 'product')
-      .where('product.isActive = true');
+      .where('product.isActive = true')
+      .andWhere('variant.isActive = true');
 
     if (query.productId) qb.andWhere('product.id = :productId', { productId: query.productId });
     if (query.categoryId) {
@@ -58,7 +59,7 @@ export class StockService {
     }
 
     const total = await qb.clone().getCount();
-    const variants = await qb.orderBy('product.name', 'ASC').offset(offset).limit(STOCK_PAGE_SIZE).getMany();
+    const variants = await qb.orderBy('product.name', 'ASC').addOrderBy('product.id').addOrderBy('variant.position', 'ASC').offset(offset).limit(STOCK_PAGE_SIZE).getMany();
 
     return {
       items: variants.map((v) => this.toStockItem(v)),
@@ -77,6 +78,10 @@ export class StockService {
     // CU-18 (flujo 2a): producto dado de baja.
     if (!variant.product.isActive) {
       throw new BadRequestException('No se puede ajustar el stock de un producto dado de baja');
+    }
+    // Misma regla para una variante quitada en la edición del producto (CU-16).
+    if (!variant.isActive) {
+      throw new BadRequestException('No se puede ajustar el stock de una variante dada de baja');
     }
 
     const newTotal = this.computeNewTotal(variant.stockTotal, dto.type, dto.quantity);

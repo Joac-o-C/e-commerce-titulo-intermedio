@@ -4,8 +4,25 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { CategoriesService } from './categories/categories.service.js';
 import { Product } from './entities/product.entity.js';
 import { ProductVariant } from './entities/product-variant.entity.js';
+import { StockMovement, StockMovementType } from './entities/stock-movement.entity.js';
 import { ProductsService } from './products.service.js';
 import { STORAGE_SERVICE } from '../../providers/storage/storage.interface.js';
+
+const variant = (id: string, talle: string, overrides: Partial<ProductVariant> = {}) =>
+  ({
+    id,
+    productId: 'product-1',
+    sku: `REM-${talle}`,
+    attributes: { Talle: talle },
+    stockTotal: 10,
+    stockReserved: 0,
+    position: 0,
+    isActive: true,
+    get stockAvailable() {
+      return this.stockTotal - this.stockReserved;
+    },
+    ...overrides,
+  }) as ProductVariant;
 
 const baseProduct = (overrides: Partial<Product> = {}): Product =>
   ({
@@ -26,16 +43,36 @@ const baseProduct = (overrides: Partial<Product> = {}): Product =>
 describe('ProductsService', () => {
   let service: ProductsService;
   let productRepo: { findOne: ReturnType<typeof vi.fn>; save: ReturnType<typeof vi.fn> };
+  let variantRepo: { findOne: ReturnType<typeof vi.fn>; createQueryBuilder: ReturnType<typeof vi.fn> };
+  // Variantes vigentes en la base y lo que se guardó en la transacción.
+  let stored: ProductVariant[];
+  let saved: { entity: unknown; rows: unknown[] }[];
+  let manager: Record<string, ReturnType<typeof vi.fn>>;
 
   beforeEach(async () => {
     productRepo = { findOne: vi.fn(), save: vi.fn((data) => Promise.resolve(data)) };
+    const skuQuery = { where: vi.fn(), andWhere: vi.fn(), getOne: vi.fn().mockResolvedValue(null) };
+    skuQuery.where.mockReturnValue(skuQuery);
+    skuQuery.andWhere.mockReturnValue(skuQuery);
+    variantRepo = { findOne: vi.fn(), createQueryBuilder: vi.fn().mockReturnValue(skuQuery) };
+    stored = [];
+    saved = [];
+    manager = {
+      find: vi.fn(() => Promise.resolve(stored)),
+      create: vi.fn((_entity: unknown, data: object) => ({ ...data })),
+      save: vi.fn((entity: unknown, rows: unknown) => {
+        saved.push({ entity, rows: Array.isArray(rows) ? rows : [rows] });
+        return Promise.resolve(rows);
+      }),
+      findOne: vi.fn(() => Promise.resolve(baseProduct({ variants: stored }))),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         ProductsService,
         { provide: getRepositoryToken(Product), useValue: productRepo },
-        { provide: getRepositoryToken(ProductVariant), useValue: {} },
-        { provide: getDataSourceToken(), useValue: { transaction: vi.fn() } },
+        { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
+        { provide: getDataSourceToken(), useValue: { transaction: (cb: (m: unknown) => unknown) => cb(manager) } },
         { provide: CategoriesService, useValue: { findByIds: vi.fn() } },
         { provide: STORAGE_SERVICE, useValue: { upload: vi.fn() } },
       ],
@@ -75,6 +112,164 @@ describe('ProductsService', () => {
       await expect(
         service.update('product-1', { version: 1, name: 'Nuevo nombre' } as never),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('CU-16 ABM de productos (edición de variantes)', () => {
+    const savedVariants = () => saved.filter((s) => s.entity === ProductVariant).flatMap((s) => s.rows) as ProductVariant[];
+    const savedMovements = () => saved.filter((s) => s.entity === StockMovement).flatMap((s) => s.rows) as StockMovement[];
+    const edit = (variants: object[]) =>
+      service.update('product-1', { version: 1, variants } as never, [], 'admin-1');
+    const asInput = (v: ProductVariant, extra: object = {}) => ({
+      id: v.id,
+      sku: v.sku,
+      attributes: v.attributes,
+      stockTotal: v.stockTotal,
+      ...extra,
+    });
+
+    beforeEach(() => {
+      stored = [variant('s', 'S', { position: 0 }), variant('m', 'M', { position: 1 }), variant('l', 'L', { position: 2 })];
+      productRepo.findOne.mockResolvedValue(baseProduct({ variants: stored }));
+    });
+
+    it('3a: actualiza las variantes en su lugar (sin borrarlas) y la posición sigue el orden de la lista', async () => {
+      const [s, m, l] = stored;
+      await edit([asInput(l), asInput(s), asInput(m)]);
+
+      expect(manager.delete).toBeUndefined();
+      expect(savedVariants().map((v) => [v.id, v.position, v.isActive])).toEqual([
+        ['l', 0, true],
+        ['s', 1, true],
+        ['m', 2, true],
+      ]);
+      expect(savedMovements()).toEqual([]);
+    });
+
+    it('3a: una variante nueva se crea al final con su stock inicial y sin movimiento', async () => {
+      const [s, m, l] = stored;
+      await edit([asInput(s), asInput(m), asInput(l), { sku: 'REM-XXL', attributes: { Talle: 'XXL' }, stockTotal: 4 }]);
+
+      expect(savedVariants().at(-1)).toEqual({
+        productId: 'product-1',
+        sku: 'REM-XXL',
+        attributes: { Talle: 'XXL' },
+        stockTotal: 4,
+        position: 3,
+      });
+      expect(savedMovements()).toEqual([]);
+    });
+
+    it('3a: la variante que no viene en la lista queda dada de baja lógica', async () => {
+      const [s, , l] = stored;
+      await edit([asInput(s), asInput(l)]);
+
+      expect(savedVariants().find((v) => v.id === 'm')).toMatchObject({ isActive: false });
+      expect(savedVariants().filter((v) => v.isActive).map((v) => [v.id, v.position])).toEqual([
+        ['s', 0],
+        ['l', 1],
+      ]);
+    });
+
+    it('3a: una variante dada de baja que vuelve a la lista se reactiva, en la posición indicada', async () => {
+      stored[1].isActive = false;
+      const [s, m, l] = stored;
+      await edit([asInput(s), asInput(l), asInput(m)]);
+
+      expect(savedVariants().map((v) => [v.id, v.position, v.isActive])).toEqual([
+        ['s', 0, true],
+        ['l', 1, true],
+        ['m', 2, true],
+      ]);
+    });
+
+    it('3a: no crea una variante nueva con el SKU de una dada de baja (se reactiva esa)', async () => {
+      stored[1].isActive = false;
+      const [s, , l] = stored;
+
+      await expect(edit([asInput(s), asInput(l), { sku: 'REM-M', stockTotal: 1 }])).rejects.toThrow(/dada de baja: reactivala/);
+      expect(savedVariants()).toEqual([]);
+    });
+
+    it('3a: no deja quitar una variante con stock reservado por pedidos en curso', async () => {
+      stored[1].stockReserved = 2;
+      const [s, , l] = stored;
+
+      await expect(edit([asInput(s), asInput(l)])).rejects.toThrow(/"M" \(REM-M\).*reservado/);
+      expect(savedVariants()).toEqual([]);
+    });
+
+    it('3a: un cambio de stock queda como movimiento "ajuste" con el Administrador como actor (CU-18)', async () => {
+      const [s, m, l] = stored;
+      await edit([asInput(s, { stockTotal: 25 }), asInput(m), asInput(l)]);
+
+      expect(savedVariants()[0]).toMatchObject({ id: 's', stockTotal: 25 });
+      expect(savedMovements()).toEqual([
+        expect.objectContaining({
+          variantId: 's',
+          type: StockMovementType.AJUSTE,
+          quantity: 25,
+          resultingStockTotal: 25,
+          actorId: 'admin-1',
+        }),
+      ]);
+    });
+
+    it('3a: rechaza dejar el stock total por debajo del reservado (CU-18 6b)', async () => {
+      stored[0].stockReserved = 6;
+      const [s, m, l] = stored;
+
+      await expect(edit([asInput(s, { stockTotal: 5 }), asInput(m), asInput(l)])).rejects.toBeInstanceOf(BadRequestException);
+      expect(savedVariants()).toEqual([]);
+      expect(savedMovements()).toEqual([]);
+    });
+
+    it('3a: rechaza una variante que ya no existe (editada en paralelo)', async () => {
+      await expect(edit([{ id: '00000000-0000-4000-8000-000000000000', sku: 'X', stockTotal: 1 }])).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+
+    it('3a: la respuesta trae sólo las variantes vigentes, en su orden', async () => {
+      manager.findOne.mockResolvedValue(
+        baseProduct({
+          variants: [variant('l', 'L', { position: 1 }), variant('m', 'M', { isActive: false }), variant('s', 'S', { position: 0 })],
+        }),
+      );
+      const [s, , l] = stored;
+
+      const result = await edit([asInput(s), asInput(l)]);
+
+      expect(result.variants.map((v) => v.id)).toEqual(['s', 'l']);
+      expect(result.inactiveVariants.map((v) => v.id)).toEqual(['m']);
+    });
+  });
+
+  describe('CU-09 Ver detalle de producto', () => {
+    it('muestra las variantes vigentes en el orden fijado por el Administrador', async () => {
+      productRepo.findOne.mockResolvedValue(
+        baseProduct({
+          variants: [
+            variant('xl', 'XL', { position: 3 }),
+            variant('s', 'S', { position: 0 }),
+            variant('m', 'M', { position: 1, isActive: false }),
+            variant('l', 'L', { position: 2 }),
+          ],
+        }),
+      );
+
+      const detail = await service.findPublicDetail('product-1');
+
+      expect(detail.variants.map((v) => v.attributes.Talle)).toEqual(['S', 'L', 'XL']);
+      expect(detail.stockAvailable).toBe(30);
+    });
+  });
+
+  describe('CU-02 Agregar producto al carrito', () => {
+    it('una variante dada de baja no se puede comprar', async () => {
+      variantRepo.findOne.mockResolvedValue(variant('m', 'M', { isActive: false, product: baseProduct() }));
+
+      await expect(service.resolveVariantForPurchase('m')).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

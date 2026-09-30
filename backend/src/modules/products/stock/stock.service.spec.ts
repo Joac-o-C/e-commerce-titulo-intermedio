@@ -15,6 +15,8 @@ const baseVariant = (overrides: Partial<ProductVariant> = {}): ProductVariant =>
     attributes: {},
     stockTotal: 10,
     stockReserved: 2,
+    position: 0,
+    isActive: true,
     product: { id: 'product-1', name: 'Producto', isActive: true, lowStockThreshold: null } as Product,
     ...overrides,
   }) as ProductVariant;

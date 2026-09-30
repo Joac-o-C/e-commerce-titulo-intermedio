@@ -177,31 +177,33 @@ export function AdminOrderDetail() {
       </Card>
 
       <Card title="Productos">
-        <table className="w-full text-left">
-          <thead className="text-neutral-500">
-            <tr>
-              <th className="py-1 font-medium">Producto</th>
-              <th className="py-1 text-right font-medium">Cantidad</th>
-              <th className="py-1 text-right font-medium">Precio</th>
-              <th className="py-1 text-right font-medium">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {order.items.map((item) => (
-              <tr key={item.id} className="border-t border-neutral-100">
-                <td className="py-1.5">
-                  {item.productName}
-                  {Object.keys(item.variantAttributes).length > 0 && (
-                    <span className="block text-xs text-neutral-500">{formatAttributes(item.variantAttributes)}</span>
-                  )}
-                </td>
-                <td className="py-1.5 text-right">{item.quantity}</td>
-                <td className="py-1.5 text-right">${item.unitPrice}</td>
-                <td className="py-1.5 text-right">${item.subtotal}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="text-neutral-500">
+              <tr>
+                <th className="py-1 font-medium">Producto</th>
+                <th className="whitespace-nowrap py-1 pl-4 text-right font-medium">Cantidad</th>
+                <th className="whitespace-nowrap py-1 pl-4 text-right font-medium">Precio</th>
+                <th className="whitespace-nowrap py-1 pl-4 text-right font-medium">Subtotal</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {order.items.map((item) => (
+                <tr key={item.id} className="border-t border-neutral-100">
+                  <td className="py-1.5">
+                    {item.productName}
+                    {Object.keys(item.variantAttributes).length > 0 && (
+                      <span className="block text-xs text-neutral-500">{formatAttributes(item.variantAttributes)}</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">{item.quantity}</td>
+                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">${item.unitPrice}</td>
+                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">${item.subtotal}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <dl className="mt-3 space-y-1 border-t border-neutral-100 pt-3 text-right">
           <div>
             <dt className="inline text-neutral-500">Subtotal: </dt>
@@ -328,9 +330,13 @@ interface ActionProps {
 
 /** Pasos 5-8: sólo las transiciones válidas desde el estado actual (flujo 7a). */
 function StatusChanger({ order, onDone, onError }: ActionProps) {
-  const [to, setTo] = useState<OrderStatus | ''>('')
+  const [chosen, setTo] = useState<OrderStatus | ''>('')
   const [note, setNote] = useState('')
   const [tracking, setTracking] = useState<TrackingDraft>(EMPTY_TRACKING)
+  // Si otro admin cambió el pedido antes (ORDER_STATUS_CHANGED), la orden se
+  // refresca y la elección vieja puede ya no ser una transición válida: se
+  // descarta y el admin vuelve a elegir entre las actuales.
+  const to = chosen && order.actions.transitions.includes(chosen) ? chosen : ''
 
   const change = useMutation({
     mutationFn: () =>
