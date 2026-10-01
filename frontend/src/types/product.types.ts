@@ -110,6 +110,8 @@ export interface VariantInput {
   sku: string
   attributes?: Record<string, string>
   stockTotal: number
+  /** Sólo con `id`: el stock total cargado al abrir el formulario; el backend aplica `stockTotal` sólo si difiere. */
+  originalStockTotal?: number
 }
 
 export interface ProductFormInput {

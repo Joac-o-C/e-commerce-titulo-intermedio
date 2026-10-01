@@ -48,6 +48,8 @@ describe('ProductsService', () => {
   let stored: ProductVariant[];
   let saved: { entity: unknown; rows: unknown[] }[];
   let manager: Record<string, ReturnType<typeof vi.fn>>;
+  // Bump condicional de `version` (CU-16 2a): filas afectadas.
+  let versionBump: { execute: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     productRepo = { findOne: vi.fn(), save: vi.fn((data) => Promise.resolve(data)) };
@@ -57,7 +59,14 @@ describe('ProductsService', () => {
     variantRepo = { findOne: vi.fn(), createQueryBuilder: vi.fn().mockReturnValue(skuQuery) };
     stored = [];
     saved = [];
+    versionBump = { execute: vi.fn().mockResolvedValue({ affected: 1 }) };
+    const updateQuery = { update: vi.fn(), set: vi.fn(), where: vi.fn(), execute: versionBump.execute };
+    updateQuery.update.mockReturnValue(updateQuery);
+    updateQuery.set.mockReturnValue(updateQuery);
+    updateQuery.where.mockReturnValue(updateQuery);
     manager = {
+      createQueryBuilder: vi.fn(() => updateQuery),
+      update: vi.fn().mockResolvedValue({ affected: 1 }),
       find: vi.fn(() => Promise.resolve(stored)),
       create: vi.fn((_entity: unknown, data: object) => ({ ...data })),
       save: vi.fn((entity: unknown, rows: unknown) => {
@@ -113,6 +122,16 @@ describe('ProductsService', () => {
         service.update('product-1', { version: 1, name: 'Nuevo nombre' } as never),
       ).rejects.toBeInstanceOf(ConflictException);
     });
+
+    it('2a: rechaza la edición si otro guardado subió la versión entre el chequeo y la transacción', async () => {
+      productRepo.findOne.mockResolvedValue(baseProduct({ version: 1 }));
+      versionBump.execute.mockResolvedValue({ affected: 0 });
+
+      await expect(
+        service.update('product-1', { version: 1, name: 'Nuevo nombre' } as never),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(saved).toEqual([]);
+    });
   });
 
   describe('CU-16 ABM de productos (edición de variantes)', () => {
@@ -125,6 +144,7 @@ describe('ProductsService', () => {
       sku: v.sku,
       attributes: v.attributes,
       stockTotal: v.stockTotal,
+      originalStockTotal: v.stockTotal,
       ...extra,
     });
 
@@ -215,6 +235,27 @@ describe('ProductsService', () => {
       ]);
     });
 
+    it('3a: guardar sin tocar el stock conserva el de la base aunque se haya movido mientras tanto', async () => {
+      const [s, m, l] = stored;
+      const inputs = [asInput(s), asInput(m), asInput(l)];
+      s.stockTotal = 8; // un pedido pagado descontó 2 con el formulario abierto
+
+      await edit(inputs);
+
+      expect(savedVariants()[0]).toMatchObject({ id: 's', stockTotal: 8 });
+      expect(savedMovements()).toEqual([]);
+    });
+
+    it('3a: rechaza un cambio de stock si la base se movió mientras se editaba', async () => {
+      const [s, m, l] = stored;
+      const inputs = [asInput(s, { stockTotal: 25 }), asInput(m), asInput(l)];
+      s.stockTotal = 8;
+
+      await expect(edit(inputs)).rejects.toThrow(/cambió mientras editabas \(ahora es 8\)/);
+      expect(savedVariants()).toEqual([]);
+      expect(savedMovements()).toEqual([]);
+    });
+
     it('3a: rechaza dejar el stock total por debajo del reservado (CU-18 6b)', async () => {
       stored[0].stockReserved = 6;
       const [s, m, l] = stored;
@@ -222,6 +263,46 @@ describe('ProductsService', () => {
       await expect(edit([asInput(s, { stockTotal: 5 }), asInput(m), asInput(l)])).rejects.toBeInstanceOf(BadRequestException);
       expect(savedVariants()).toEqual([]);
       expect(savedMovements()).toEqual([]);
+    });
+
+    it('3a: quitar una fila y cargar otra con el mismo SKU reusa la variante, con su stock', async () => {
+      stored[1].stockTotal = 7;
+      const [s, , l] = stored;
+
+      await edit([asInput(s), asInput(l), { sku: 'REM-M', attributes: { Talle: 'Mediano' }, stockTotal: 0 }]);
+
+      expect(savedVariants().filter((v) => v.id === 'm')).toEqual([
+        expect.objectContaining({ isActive: true, position: 2, attributes: { Talle: 'Mediano' }, stockTotal: 7 }),
+      ]);
+      expect(savedVariants().every((v) => v.id !== undefined)).toBe(true);
+      expect(savedMovements()).toEqual([]);
+    });
+
+    it('3a: no deja renombrar una variante al SKU de otra que se está quitando', async () => {
+      const [s, , l] = stored;
+
+      await expect(edit([asInput(s, { sku: 'REM-M' }), asInput(l)])).rejects.toThrow(/"REM-M" es de la variante "M" \(REM-M\), que estás quitando/);
+      expect(savedVariants()).toEqual([]);
+    });
+
+    it('3a: no deja renombrar una variante al SKU de una dada de baja', async () => {
+      stored[1].isActive = false;
+      const [s, , l] = stored;
+
+      await expect(edit([asInput(s, { sku: 'REM-M' }), asInput(l)])).rejects.toThrow(/"REM-M" es de una variante dada de baja de este producto/);
+    });
+
+    it('3a: dos variantes pueden intercambiar sus SKU (pasan antes por uno temporal)', async () => {
+      const [s, m, l] = stored;
+      await edit([asInput(s, { sku: 'REM-M' }), asInput(m, { sku: 'REM-S' }), asInput(l)]);
+
+      expect(manager.update).toHaveBeenCalledTimes(1);
+      expect(manager.update.mock.invocationCallOrder[0]).toBeLessThan(manager.save.mock.invocationCallOrder.at(-1)!);
+      expect(savedVariants().map((v) => [v.id, v.sku])).toEqual([
+        ['s', 'REM-M'],
+        ['m', 'REM-S'],
+        ['l', 'REM-L'],
+      ]);
     });
 
     it('3a: rechaza una variante que ya no existe (editada en paralelo)', async () => {

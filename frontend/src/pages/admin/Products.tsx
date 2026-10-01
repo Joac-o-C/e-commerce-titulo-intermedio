@@ -27,11 +27,13 @@ interface VariantRow {
   attributeKey: string
   attributeValue: string
   stockTotal: number
+  /** Stock total al abrir el formulario (sólo existentes): si no se tocó, el backend no lo pisa. */
+  originalStockTotal?: number
 }
 
 function toVariantRow(v: AdminProductVariant): VariantRow {
   const [attributeKey, attributeValue] = Object.entries(v.attributes)[0] ?? ['', '']
-  return { key: v.id, id: v.id, sku: v.sku, attributeKey, attributeValue, stockTotal: v.stockTotal }
+  return { key: v.id, id: v.id, sku: v.sku, attributeKey, attributeValue, stockTotal: v.stockTotal, originalStockTotal: v.stockTotal }
 }
 
 function formatVariantAttributes(attributes: Record<string, string>): string {
@@ -80,6 +82,7 @@ function toFormInput(form: FormState): ProductFormInput {
       id: v.id,
       sku: v.sku,
       stockTotal: v.stockTotal,
+      originalStockTotal: v.id ? v.originalStockTotal : undefined,
       attributes: v.attributeKey ? { [v.attributeKey]: v.attributeValue } : {},
     }))
   return {

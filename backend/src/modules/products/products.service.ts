@@ -210,6 +210,24 @@ export class ProductsService {
     if (dto.lowStockThreshold !== undefined) product.lowStockThreshold = dto.lowStockThreshold;
 
     return this.dataSource.transaction(async (manager) => {
+      // CU-16 (flujo 2a): el chequeo de arriba no alcanza solo. @VersionColumn
+      // sólo sube si cambian campos del producto, y un guardado que toca
+      // únicamente variantes debe invalidar igual los formularios abiertos.
+      // Este bump condicional además toma el lock de la fila hasta el commit,
+      // así que dos guardados con la misma versión no pueden pasar ambos.
+      const bumped = await manager
+        .createQueryBuilder()
+        .update(Product)
+        .set({ version: () => 'version + 1' })
+        .where('id = :id AND version = :version', { id, version: dto.version })
+        .execute();
+      if (!bumped.affected) {
+        throw new ConflictException(
+          'El producto fue modificado por otro administrador; recargá los datos e intentá de nuevo',
+        );
+      }
+      product.version = dto.version + 1;
+
       let saved: Product;
       try {
         saved = await manager.save(Product, product);
@@ -247,11 +265,18 @@ export class ProductsService {
 
   /**
    * CU-16 (flujo 3a): lleva las variantes del producto a la lista editada.
-   * - Con `id`: se actualiza en su lugar (SKU, atributos, posición). Si el
-   *   stock total cambia, queda un movimiento "ajuste" con el Administrador
-   *   como actor, con la misma regla que CU-18 (flujo 6b): nunca por debajo
-   *   de lo reservado.
+   * - Con `id`: se actualiza en su lugar (SKU, atributos, posición). El
+   *   stock total sólo se toca si el Administrador lo cambió en el
+   *   formulario (`stockTotal` distinto de `originalStockTotal`); si no, se
+   *   conserva el de la base, que pudo moverse mientras el formulario estaba
+   *   abierto. Si lo cambió y la base también se movió, se rechaza (hay que
+   *   recargar). Si lo cambió, queda un movimiento "ajuste" con el
+   *   Administrador como actor, con la misma regla que CU-18 (flujo 6b):
+   *   nunca por debajo de lo reservado.
    * - Sin `id`: variante nueva, con su stock inicial (igual que en el alta).
+   *   Si su SKU es el de una vigente que no vino en la lista (se quitó la
+   *   fila y se volvió a cargar), es esa misma: sigue vigente, con su stock
+   *   y su historial, y toma los atributos y la posición de la fila.
    * - Las vigentes que no vienen: baja lógica, salvo que tengan stock
    *   reservado por pedidos en curso (mismo criterio que la baja de producto).
    * - Una dada de baja que vuelve a venir en la lista (con su `id`) se
@@ -282,17 +307,36 @@ export class ProductsService {
       input.map((v) => v.sku),
       productId,
     );
-    // Nueva con el SKU de una dada de baja del mismo producto: se reactiva
-    // esa (desde "Dadas de baja"), no se crea otra.
-    const newSkus = new Set(input.filter((v) => !v.id).map((v) => v.sku));
-    const clash = current.find((v) => !v.isActive && newSkus.has(v.sku));
-    if (clash) {
+
+    // Cada fila de la lista con la variante de la base que le corresponde.
+    const droppedBySku = new Map(
+      current.filter((v) => v.isActive && !keptIds.includes(v.id)).map((v) => [v.sku, v]),
+    );
+    const rows = input.map((v) => {
+      const reused = v.id ? undefined : droppedBySku.get(v.sku);
+      return { input: v, existing: v.id ? byId.get(v.id) : reused, reused: reused !== undefined };
+    });
+    const targetIds = new Set(rows.flatMap((r) => (r.existing ? [r.existing.id] : [])));
+
+    // Las que quedan fuera de la lista (dadas de baja o que se quitan ahora)
+    // conservan su SKU: ninguna fila puede tomarlo.
+    const outsideBySku = new Map(current.filter((v) => !targetIds.has(v.id)).map((v) => [v.sku, v]));
+    for (const { input: v, existing } of rows) {
+      const clash = outsideBySku.get(v.sku);
+      if (!clash) continue;
+      if (!clash.isActive && !existing) {
+        throw new BadRequestException(
+          `El SKU "${clash.sku}" es de una variante dada de baja: reactivala desde "Dadas de baja" en vez de crear una nueva`,
+        );
+      }
       throw new BadRequestException(
-        `El SKU "${clash.sku}" es de una variante dada de baja: reactivala desde "Dadas de baja" en vez de crear una nueva`,
+        clash.isActive
+          ? `El SKU "${clash.sku}" es de la variante ${this.variantLabel(clash)}, que estás quitando`
+          : `El SKU "${clash.sku}" es de una variante dada de baja de este producto`,
       );
     }
 
-    const removed = current.filter((v) => v.isActive && !keptIds.includes(v.id));
+    const removed = current.filter((v) => v.isActive && !targetIds.has(v.id));
     const reserved = removed.find((v) => v.stockReserved > 0);
     if (reserved) {
       throw new BadRequestException(
@@ -302,8 +346,8 @@ export class ProductsService {
     for (const variant of removed) variant.isActive = false;
 
     const movements: StockMovement[] = [];
-    const upserts = input.map((v, position) => {
-      const existing = v.id ? byId.get(v.id) : undefined;
+    const renamed: ProductVariant[] = [];
+    const upserts = rows.map(({ input: v, existing, reused }, position) => {
       if (!existing) {
         return manager.create(ProductVariant, {
           productId,
@@ -313,7 +357,12 @@ export class ProductsService {
           position,
         });
       }
-      if (v.stockTotal !== existing.stockTotal) {
+      if (!reused && v.stockTotal !== v.originalStockTotal) {
+        if (existing.stockTotal !== v.originalStockTotal) {
+          throw new ConflictException(
+            `El stock de la variante ${this.variantLabel(existing)} cambió mientras editabas (ahora es ${existing.stockTotal}); recargá los datos e intentá de nuevo`,
+          );
+        }
         if (v.stockTotal < existing.stockReserved) {
           throw new BadRequestException(
             `El stock total de la variante ${this.variantLabel(existing)} (${v.stockTotal}) no puede quedar por debajo del reservado (${existing.stockReserved})`,
@@ -329,11 +378,19 @@ export class ProductsService {
             actorId,
           }),
         );
+        existing.stockTotal = v.stockTotal;
       }
-      Object.assign(existing, { sku: v.sku, attributes: v.attributes ?? {}, stockTotal: v.stockTotal, position, isActive: true });
+      if (existing.sku !== v.sku) renamed.push(existing);
+      Object.assign(existing, { sku: v.sku, attributes: v.attributes ?? {}, position, isActive: true });
       return existing;
     });
 
+    // El UNIQUE de `sku` se chequea sentencia por sentencia: para que dos
+    // variantes puedan intercambiar SKUs, las renombradas pasan primero por
+    // uno temporal que no choca con nada.
+    if (renamed.length > 0) {
+      await manager.update(ProductVariant, { id: In(renamed.map((v) => v.id)) }, { sku: () => "'tmp-' || id::text" });
+    }
     // Salvaguarda del UNIQUE de `sku` (carreras): saveVariantsOrFail la traduce a un 400.
     await this.saveVariantsOrFail(manager, [...removed, ...upserts]);
     if (movements.length > 0) await manager.save(StockMovement, movements);

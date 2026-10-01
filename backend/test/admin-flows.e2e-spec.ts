@@ -393,7 +393,13 @@ describe('Administración de pedidos, reembolsos y posventa (e2e)', () => {
     expect(await talles()).toEqual(['S', 'M', 'L']);
 
     const { version } = await productRepo.findOneByOrFail({ id: sold.id });
-    const asInput = (v: ProductVariant, stockTotal = v.stockTotal) => ({ id: v.id, sku: v.sku, attributes: v.attributes, stockTotal });
+    const asInput = (v: ProductVariant, stockTotal = v.stockTotal) => ({
+      id: v.id,
+      sku: v.sku,
+      attributes: v.attributes,
+      stockTotal,
+      originalStockTotal: v.stockTotal,
+    });
     // Reordena (L primero), sube el stock de S, quita M (vendida) y agrega XL al final.
     await request(server())
       .patch(`/admin/products/${sold.id}`)
@@ -432,5 +438,57 @@ describe('Administración de pedidos, reembolsos y posventa (e2e)', () => {
       .expect(200);
     expect(await talles()).toEqual(['L', 'S', 'XL', 'M']);
     await request(server()).post('/cart/items').set(customer()).send({ variantId: m.id, quantity: 1 }).expect(201);
+  });
+
+  it('CU-16 3a/2a: la edición no pisa stock ni variantes que cambiaron con el formulario abierto, y admite intercambiar SKU', async () => {
+    const stamp = Date.now();
+    const edited = await productRepo.save(
+      productRepo.create({ name: `Producto e2e edición ${stamp}`, description: 'e2e', price: '1000.00', isPublished: true }),
+    );
+    const [s, m] = await variantRepo.save(
+      ['S', 'M'].map((talle, position) =>
+        variantRepo.create({ productId: edited.id, sku: `E2E-EDI-${talle}-${stamp}`, attributes: { Talle: talle }, stockTotal: 10, position }),
+      ),
+    );
+    const asInput = (v: ProductVariant, extra: object = {}) => ({
+      id: v.id,
+      sku: v.sku,
+      attributes: v.attributes,
+      stockTotal: v.stockTotal,
+      originalStockTotal: v.stockTotal,
+      ...extra,
+    });
+    const save = (version: number, variants: object[], fields: Record<string, string> = {}) => {
+      const req = request(server()).patch(`/admin/products/${edited.id}`).set(admin()).field('version', String(version));
+      for (const [key, value] of Object.entries(fields)) req.field(key, value);
+      return req.field('variants', JSON.stringify(variants));
+    };
+
+    // Dos Administradores abren el formulario con la misma versión.
+    const { version } = await productRepo.findOneByOrFail({ id: edited.id });
+    // Mientras tanto se vende una unidad de S.
+    await paidOrder(s, 1);
+    const sAfterSale = await variantRepo.findOneByOrFail({ id: s.id });
+
+    // A sólo agrega una variante: igual invalida el formulario de B.
+    const xl = { sku: `E2E-EDI-XL-${stamp}`, attributes: { Talle: 'XL' }, stockTotal: 2 };
+    const afterA = (await save(version, [asInput(s), asInput(m), xl]).expect(200)).body;
+    expect(afterA.version).toBeGreaterThan(version);
+    // El stock de S que vino del formulario (sin tocar) no pisó la venta.
+    expect(await variantRepo.findOneByOrFail({ id: s.id })).toMatchObject({
+      stockTotal: sAfterSale.stockTotal,
+      stockReserved: sAfterSale.stockReserved,
+    });
+    expect(await movementRepo.countBy({ variantId: s.id, type: StockMovementType.AJUSTE })).toBe(0);
+
+    // B guarda desde su formulario viejo (sin XL): conflicto, XL sigue vigente.
+    await save(version, [asInput(s), asInput(m)], { name: 'Nombre de B' }).expect(409);
+    expect(afterA.variants.map((v: ProductVariant) => v.sku)).toContain(xl.sku);
+    expect(await variantRepo.findOneByOrFail({ sku: xl.sku })).toMatchObject({ isActive: true });
+
+    // Intercambio de SKU entre S y M en un mismo guardado.
+    await save(afterA.version, [asInput(s, { sku: m.sku }), asInput(m, { sku: s.sku }), ...afterA.variants.slice(2).map(asInput)]).expect(200);
+    expect((await variantRepo.findOneByOrFail({ id: s.id })).sku).toBe(m.sku);
+    expect((await variantRepo.findOneByOrFail({ id: m.id })).sku).toBe(s.sku);
   });
 });
