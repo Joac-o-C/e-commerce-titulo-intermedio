@@ -74,3 +74,14 @@ front:
 - unitarios: npm test
 
 CI: en cada push y pull request, GitHub Actions (.github/workflows/ci.yml) corre en los dos proyectos build, lint y tests; en el back además el typecheck, las migraciones, el seed y los e2e contra un Postgres propio.
+
+
+TODO:
+
+- agregar visualización de contraseña en auth
+- realizar cambios estéticos a frontend (charlar todo el equipo)
+- agregar imagen de la marca a la página (header)
+- mensajes genéricos en login (ahora dice contraseña/correo inválido)
+- mostrar vía toast el mensaje de "cuenta bloqueada por 15 minutos" en frontend
+- mostrar cuadro de confirmación para otorgar permisos de administrador
+-  
