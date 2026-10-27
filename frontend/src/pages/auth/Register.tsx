@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form'
 import { Link } from 'react-router-dom'
 import { z } from 'zod'
 import { authService } from '../../services/auth.service'
+import { ProgressBar } from '../../components/ui/ProgressBar'
+import { SubmitButton } from '../../components/ui/SubmitButton'
 import { PASSWORD_POLICY_MESSAGE, PASSWORD_POLICY_REGEX } from './password-policy'
 
 const schema = z
@@ -62,81 +64,81 @@ export function Register() {
     <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="w-full max-w-sm space-y-4 rounded-lg bg-white p-6 shadow"
+        aria-busy={isSubmitting}
+        className="w-full max-w-sm overflow-hidden rounded-lg bg-white shadow"
       >
-        <h1 className="text-xl font-semibold text-neutral-800">Crear cuenta</h1>
+        <ProgressBar active={isSubmitting} />
+        <fieldset disabled={isSubmitting} className="space-y-4 p-6">
+          <h1 className="text-xl font-semibold text-neutral-800">Crear cuenta</h1>
 
-        <div>
-          <input
-            {...register('firstName')}
-            placeholder="Nombre"
-            className="w-full rounded border border-neutral-300 px-3 py-2"
-          />
-          {errors.firstName && <p className="text-sm text-red-600">{errors.firstName.message}</p>}
-        </div>
+          <div>
+            <input
+              {...register('firstName')}
+              placeholder="Nombre"
+              className="w-full rounded border border-neutral-300 px-3 py-2"
+            />
+            {errors.firstName && <p className="text-sm text-red-600">{errors.firstName.message}</p>}
+          </div>
 
-        <div>
-          <input
-            {...register('lastName')}
-            placeholder="Apellido"
-            className="w-full rounded border border-neutral-300 px-3 py-2"
-          />
-          {errors.lastName && <p className="text-sm text-red-600">{errors.lastName.message}</p>}
-        </div>
+          <div>
+            <input
+              {...register('lastName')}
+              placeholder="Apellido"
+              className="w-full rounded border border-neutral-300 px-3 py-2"
+            />
+            {errors.lastName && <p className="text-sm text-red-600">{errors.lastName.message}</p>}
+          </div>
 
-        <div>
-          <input
-            {...register('email')}
-            type="email"
-            placeholder="Email"
-            className="w-full rounded border border-neutral-300 px-3 py-2"
-          />
-          {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
-        </div>
+          <div>
+            <input
+              {...register('email')}
+              type="email"
+              placeholder="Email"
+              className="w-full rounded border border-neutral-300 px-3 py-2"
+            />
+            {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
+          </div>
 
-        <div>
-          <input
-            {...register('password')}
-            type="password"
-            placeholder="Contraseña"
-            className="w-full rounded border border-neutral-300 px-3 py-2"
-          />
-          {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
-        </div>
+          <div>
+            <input
+              {...register('password')}
+              type="password"
+              placeholder="Contraseña"
+              className="w-full rounded border border-neutral-300 px-3 py-2"
+            />
+            {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
+          </div>
 
-        <div>
-          <input
-            {...register('passwordConfirmation')}
-            type="password"
-            placeholder="Confirmar contraseña"
-            className="w-full rounded border border-neutral-300 px-3 py-2"
-          />
-          {errors.passwordConfirmation && (
-            <p className="text-sm text-red-600">{errors.passwordConfirmation.message}</p>
-          )}
-        </div>
+          <div>
+            <input
+              {...register('passwordConfirmation')}
+              type="password"
+              placeholder="Confirmar contraseña"
+              className="w-full rounded border border-neutral-300 px-3 py-2"
+            />
+            {errors.passwordConfirmation && (
+              <p className="text-sm text-red-600">{errors.passwordConfirmation.message}</p>
+            )}
+          </div>
 
-        <div className="flex items-center gap-2">
-          <input {...register('acceptTerms')} type="checkbox" id="acceptTerms" />
-          <label htmlFor="acceptTerms" className="text-sm text-neutral-700">
-            Acepto los términos y condiciones
-          </label>
-        </div>
-        {errors.acceptTerms && <p className="text-sm text-red-600">{errors.acceptTerms.message}</p>}
+          <div className="flex items-center gap-2">
+            <input {...register('acceptTerms')} type="checkbox" id="acceptTerms" />
+            <label htmlFor="acceptTerms" className="text-sm text-neutral-700">
+              Acepto los términos y condiciones
+            </label>
+          </div>
+          {errors.acceptTerms && <p className="text-sm text-red-600">{errors.acceptTerms.message}</p>}
 
-        {serverError && <p className="text-sm text-red-600">{serverError}</p>}
+          {serverError && <p className="text-sm text-red-600">{serverError}</p>}
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full rounded bg-neutral-800 py-2 text-white disabled:opacity-50"
-        >
-          Crear cuenta
-        </button>
+          <SubmitButton loading={isSubmitting} loadingLabel="Creando cuenta…">
+            Crear cuenta
+          </SubmitButton>
 
-        <p className="text-center text-sm text-neutral-600">
-          ¿Ya tenés cuenta? <Link to="/login" className="underline">Iniciar sesión</Link>
-        </p>
+          <p className="text-center text-sm text-neutral-600">
+            ¿Ya tenés cuenta? <Link to="/login" className="underline">Iniciar sesión</Link>
+          </p>
+        </fieldset>
       </form>
     </main>
   )

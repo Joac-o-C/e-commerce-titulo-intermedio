@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth.store'
+import { ProgressBar } from '../ui/ProgressBar'
 
 /** Envuelve rutas que requieren sesión iniciada (ej. /account/addresses). */
 export function ProtectedRoute() {
@@ -7,7 +8,8 @@ export function ProtectedRoute() {
   const location = useLocation()
 
   if (status === 'idle' || status === 'loading') {
-    return null
+    // Mientras AuthBootstrap recupera la sesión: barra arriba en vez de página en blanco.
+    return <ProgressBar active className="fixed inset-x-0 top-0 z-50" />
   }
 
   if (status === 'unauthenticated') {

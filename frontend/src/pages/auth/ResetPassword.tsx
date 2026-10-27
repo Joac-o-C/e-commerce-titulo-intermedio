@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form'
 import { Link, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import { authService } from '../../services/auth.service'
+import { ProgressBar } from '../../components/ui/ProgressBar'
+import { SubmitButton } from '../../components/ui/SubmitButton'
 import { PASSWORD_POLICY_MESSAGE, PASSWORD_POLICY_REGEX } from './password-policy'
 
 const schema = z
@@ -65,41 +67,41 @@ export function ResetPassword() {
     <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="w-full max-w-sm space-y-4 rounded-lg bg-white p-6 shadow"
+        aria-busy={isSubmitting}
+        className="w-full max-w-sm overflow-hidden rounded-lg bg-white shadow"
       >
-        <h1 className="text-xl font-semibold text-neutral-800">Nueva contraseña</h1>
+        <ProgressBar active={isSubmitting} />
+        <fieldset disabled={isSubmitting} className="space-y-4 p-6">
+          <h1 className="text-xl font-semibold text-neutral-800">Nueva contraseña</h1>
 
-        <div>
-          <input
-            {...register('password')}
-            type="password"
-            placeholder="Nueva contraseña"
-            className="w-full rounded border border-neutral-300 px-3 py-2"
-          />
-          {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
-        </div>
+          <div>
+            <input
+              {...register('password')}
+              type="password"
+              placeholder="Nueva contraseña"
+              className="w-full rounded border border-neutral-300 px-3 py-2"
+            />
+            {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
+          </div>
 
-        <div>
-          <input
-            {...register('passwordConfirmation')}
-            type="password"
-            placeholder="Confirmar contraseña"
-            className="w-full rounded border border-neutral-300 px-3 py-2"
-          />
-          {errors.passwordConfirmation && (
-            <p className="text-sm text-red-600">{errors.passwordConfirmation.message}</p>
-          )}
-        </div>
+          <div>
+            <input
+              {...register('passwordConfirmation')}
+              type="password"
+              placeholder="Confirmar contraseña"
+              className="w-full rounded border border-neutral-300 px-3 py-2"
+            />
+            {errors.passwordConfirmation && (
+              <p className="text-sm text-red-600">{errors.passwordConfirmation.message}</p>
+            )}
+          </div>
 
-        {serverError && <p className="text-sm text-red-600">{serverError}</p>}
+          {serverError && <p className="text-sm text-red-600">{serverError}</p>}
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full rounded bg-neutral-800 py-2 text-white disabled:opacity-50"
-        >
-          Guardar contraseña
-        </button>
+          <SubmitButton loading={isSubmitting} loadingLabel="Guardando…">
+            Guardar contraseña
+          </SubmitButton>
+        </fieldset>
       </form>
     </main>
   )

@@ -7,6 +7,8 @@ import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/auth.store'
 import { useCartMerge } from '../../features/cart/hooks/useCartMerge'
 import { MergeCartModal } from '../../features/cart/components/MergeCartModal'
+import { ProgressBar } from '../../components/ui/ProgressBar'
+import { SubmitButton } from '../../components/ui/SubmitButton'
 
 const schema = z.object({
   email: z.string().email('Email inválido'),
@@ -65,44 +67,45 @@ export function Login() {
     <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="w-full max-w-sm space-y-4 rounded-lg bg-white p-6 shadow"
+        aria-busy={isSubmitting}
+        className="w-full max-w-sm overflow-hidden rounded-lg bg-white shadow"
       >
-        <h1 className="text-xl font-semibold text-neutral-800">Iniciar sesión</h1>
+        {/* isSubmitting cubre el login y la fusión del carrito: onSubmit los espera a ambos. */}
+        <ProgressBar active={isSubmitting} />
+        <fieldset disabled={isSubmitting} className="space-y-4 p-6">
+          <h1 className="text-xl font-semibold text-neutral-800">Iniciar sesión</h1>
 
-        <div>
-          <input
-            {...register('email')}
-            type="email"
-            placeholder="Email"
-            className="w-full rounded border border-neutral-300 px-3 py-2"
-          />
-          {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
-        </div>
+          <div>
+            <input
+              {...register('email')}
+              type="email"
+              placeholder="Email"
+              className="w-full rounded border border-neutral-300 px-3 py-2"
+            />
+            {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
+          </div>
 
-        <div>
-          <input
-            {...register('password')}
-            type="password"
-            placeholder="Contraseña"
-            className="w-full rounded border border-neutral-300 px-3 py-2"
-          />
-          {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
-        </div>
+          <div>
+            <input
+              {...register('password')}
+              type="password"
+              placeholder="Contraseña"
+              className="w-full rounded border border-neutral-300 px-3 py-2"
+            />
+            {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
+          </div>
 
-        {serverError && <p className="text-sm text-red-600">{serverError}</p>}
+          {serverError && <p className="text-sm text-red-600">{serverError}</p>}
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full rounded bg-neutral-800 py-2 text-white disabled:opacity-50"
-        >
-          Iniciar sesión
-        </button>
+          <SubmitButton loading={isSubmitting} loadingLabel="Iniciando sesión…">
+            Iniciar sesión
+          </SubmitButton>
 
-        <div className="flex justify-between text-sm text-neutral-600">
-          <Link to="/register" className="underline">Crear cuenta</Link>
-          <Link to="/forgot-password" className="underline">Olvidé mi contraseña</Link>
-        </div>
+          <div className="flex justify-between text-sm text-neutral-600">
+            <Link to="/register" className="underline">Crear cuenta</Link>
+            <Link to="/forgot-password" className="underline">Olvidé mi contraseña</Link>
+          </div>
+        </fieldset>
       </form>
 
       {cartMerge.conflicts && (

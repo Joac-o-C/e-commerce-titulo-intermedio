@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { useLogout } from '../../features/auth/useLogout'
 import { AddressForm } from '../../features/addresses/components/AddressForm'
 import { addressesService } from '../../services/addresses.service'
 import type { Address } from '../../types/address.types'
@@ -14,6 +16,8 @@ export function Addresses() {
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [replacementDefaultId, setReplacementDefaultId] = useState('')
+  const [confirmLogoutAll, setConfirmLogoutAll] = useState(false)
+  const logout = useLogout()
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['addresses'] })
 
@@ -115,6 +119,29 @@ export function Addresses() {
       </ul>
 
       <AddressForm isPending={createMutation.isPending} onSubmit={createMutation.mutateAsync} />
+
+      {/* CU-10 (flujo 1a): revoca todas las sesiones de la cuenta, incluida esta. */}
+      <div className="border-t border-neutral-200 pt-6">
+        <button
+          type="button"
+          onClick={() => setConfirmLogoutAll(true)}
+          className="rounded border border-neutral-300 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
+        >
+          Cerrar sesión en todos los dispositivos
+        </button>
+      </div>
+
+      <ConfirmDialog
+        open={confirmLogoutAll}
+        title="¿Cerrar sesión en todos los dispositivos?"
+        description="Vas a tener que volver a iniciar sesión en cada dispositivo, incluido este."
+        confirmLabel="Cerrar todas"
+        onConfirm={() => {
+          setConfirmLogoutAll(false)
+          logout('todas')
+        }}
+        onCancel={() => setConfirmLogoutAll(false)}
+      />
     </main>
   )
 }

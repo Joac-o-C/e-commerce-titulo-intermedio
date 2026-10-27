@@ -2,6 +2,8 @@ import { Link, Outlet } from 'react-router-dom'
 import { useCart } from '../../features/cart/hooks/useCart'
 import { useGuestCartStore } from '../../store/cart.store'
 import { useAuthStore } from '../../store/auth.store'
+import { Toaster } from '../ui/Toaster'
+import { AccountMenu } from './AccountMenu'
 import { AdminBar } from './AdminBar'
 
 /**
@@ -32,9 +34,7 @@ export function Layout() {
                 <Link to="/account/orders" className="text-neutral-600 hover:text-neutral-900">
                   Mis pedidos
                 </Link>
-                <Link to="/account/addresses" className="text-neutral-600 hover:text-neutral-900">
-                  Mi cuenta
-                </Link>
+                <AccountMenu />
               </>
             ) : (
               <Link to="/login" className="text-neutral-600 hover:text-neutral-900">
@@ -54,6 +54,7 @@ export function Layout() {
         {isAdmin && <AdminBar />}
       </header>
       <Outlet />
+      <Toaster />
     </div>
   )
 }
