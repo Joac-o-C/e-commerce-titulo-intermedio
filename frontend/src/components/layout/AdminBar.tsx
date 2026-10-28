@@ -38,7 +38,7 @@ export function AdminBar() {
 
   return (
     <div className="border-t border-neutral-100 bg-neutral-100">
-      <nav className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-1 px-4 py-2 text-sm">
+      <nav aria-label="Administración" className="admin-nav mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-1 px-4 py-2 text-sm">
         <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Admin</span>
         <Item
           to="/admin/orders"
