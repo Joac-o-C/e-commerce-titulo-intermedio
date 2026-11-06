@@ -30,3 +30,7 @@ postgres-data/
 
 # Imágenes de producto subidas en desarrollo (CU-16, LocalStorageService)
 backend/uploads/
+
+# Instrucciones locales de agentes IA (no se versionan)
+AGENTS.md
+CLAUDE.md
