@@ -79,12 +79,14 @@ CI: en cada push y pull request, GitHub Actions (.github/workflows/ci.yml) corre
 # TODO:
 
 Desarrollo general:
+
     - filtros en pestaña stock de admin
     - revisar penalización de tiempo por intentos fallidos de inicio de sesión
     - ejecutable init para linux/windows que ejecute los comandos de iniciacion
     - optimización codebase teniendo en cuenta SOLID, GRASP y patrones diseño.
 
 UX/UI:
+
     - decidir tema con equipo
 
 Seguridad:
