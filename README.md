@@ -82,6 +82,7 @@ Desarrollo general:
     - filtros en pestaña stock de admin
     - revisar penalización de tiempo por intentos fallidos de inicio de sesión
     - ejecutable init para linux/windows que ejecute los comandos de iniciacion
+    - optimización codebase teniendo en cuenta SOLID, GRASP y patrones diseño.
 
 UX/UI:
     - decidir tema con equipo
