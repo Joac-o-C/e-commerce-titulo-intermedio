@@ -6,6 +6,7 @@ import { useGuestCart } from '../../features/cart/hooks/useGuestCart'
 import { useAuthStore } from '../../store/auth.store'
 import type { InsufficientStockError } from '../../types/cart.types'
 import { formatPrice } from '../../lib/format'
+import { ProductCard } from '../../components/catalog/ProductCard'
 
 /** CU-09 Ver detalle de producto. */
 export function ProductDetail() {
@@ -222,19 +223,7 @@ export function ProductDetail() {
           <h2 className="text-lg font-semibold text-neutral-800">Productos relacionados</h2>
           <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
             {product.relatedProducts.map((p) => (
-              <Link
-                key={p.id}
-                to={`/products/${p.id}`}
-                className="rounded-lg border border-neutral-200 bg-white p-3 hover:shadow"
-              >
-                <div className="aspect-square overflow-hidden rounded bg-neutral-100">
-                  {p.mainImageUrl && (
-                    <img src={p.mainImageUrl} alt={p.name} className="h-full w-full object-cover" />
-                  )}
-                </div>
-                <p className="mt-2 truncate text-sm font-medium text-neutral-800">{p.name}</p>
-                <p className="text-sm text-neutral-600">{formatPrice(p.price)}</p>
-              </Link>
+              <ProductCard key={p.id} product={p} />
             ))}
           </div>
         </section>

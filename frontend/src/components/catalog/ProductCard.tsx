@@ -11,7 +11,7 @@ export function ProductCard({ product }: { product: ProductCardData }) {
   return (
     <Link
       to={`/products/${product.id}`}
-      className="group flex flex-col rounded-lg border border-neutral-200 bg-white p-3 transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-800"
+      className="group flex flex-col rounded-lg border border-neutral-200 bg-white p-3 transition-shadow [&:hover]:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-800"
     >
       <div className="relative aspect-square overflow-hidden rounded bg-neutral-100">
         {product.mainImageUrl && (
@@ -19,7 +19,9 @@ export function ProductCard({ product }: { product: ProductCardData }) {
             src={product.mainImageUrl}
             alt=""
             loading="lazy"
-            className={`h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+            // `[.group:hover_&]` en vez de `group-hover:`: Tailwind 4 envuelve los hover en
+            // `@media (hover: hover)`, que algunas notebooks táctiles reportan como falso.
+            className={`h-full w-full object-cover transition-transform duration-300 ease-out [.group:hover_&]:scale-[1.08] [.group:focus-visible_&]:scale-[1.08] ${
               product.isOutOfStock ? 'opacity-50' : ''
             }`}
           />
