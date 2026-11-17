@@ -97,6 +97,9 @@ Seguridad:
     - mostrar cuadro de confirmación para otorgar permisos de administrador
     - perfil superadmin para desarrolladores
 
+Deuda técnica:
+
+    - Después de auditar código, separar en partes y refactorear de a poco. No parar desarrollo, las pruebas de pipeline CI están para eso.
 # BUGFIXES:
 
 prioridad alta:
