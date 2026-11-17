@@ -75,6 +75,55 @@ describe('CartService', () => {
     service = moduleRef.get(CartService);
   });
 
+  describe('CU-11 Ver carrito', () => {
+    beforeEach(() => cartRepo.findOne.mockResolvedValue(baseCart()));
+
+    const viewItem = (product: Record<string, unknown>) => ({
+      id: 'item-1',
+      cartId: 'cart-1',
+      productId: 'product-1',
+      variantId: 'variant-1',
+      quantity: 1,
+      unitPriceSnapshot: '100.00',
+      product: baseProduct(product),
+      variant: { ...baseVariant(), product: baseProduct(product) },
+    });
+
+    it('devuelve la primera imagen del producto (por orden) para la miniatura', async () => {
+      itemRepo.find.mockResolvedValueOnce([
+        viewItem({
+          images: [
+            { url: 'http://img/segunda.png', order: 1 },
+            { url: 'http://img/primera.png', order: 0 },
+          ],
+        }),
+      ]);
+
+      const cart = await service.getCart('user-1');
+
+      expect(cart.items[0].mainImageUrl).toBe('http://img/primera.png');
+      expect(itemRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ relations: expect.objectContaining({ product: { images: true } }) }),
+      );
+    });
+
+    it('sin imágenes, mainImageUrl es null', async () => {
+      itemRepo.find.mockResolvedValueOnce([viewItem({ images: [] })]);
+
+      const cart = await service.getCart('user-1');
+
+      expect(cart.items[0].mainImageUrl).toBeNull();
+    });
+
+    it('informa el stock disponible de la variante para limitar la cantidad', async () => {
+      itemRepo.find.mockResolvedValueOnce([viewItem({ images: [] })]);
+
+      const cart = await service.getCart('user-1');
+
+      expect(cart.items[0].stockAvailable).toBe(10);
+    });
+  });
+
   describe('CU-02 Agregar producto al carrito', () => {
     it('agrega un ítem nuevo con el precio vigente del catálogo', async () => {
       cartRepo.findOne.mockResolvedValue(baseCart());

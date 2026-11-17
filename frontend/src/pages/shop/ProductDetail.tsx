@@ -7,6 +7,10 @@ import { useAuthStore } from '../../store/auth.store'
 import type { InsufficientStockError } from '../../types/cart.types'
 import { formatPrice } from '../../lib/format'
 import { ProductCard } from '../../components/catalog/ProductCard'
+import { QuantityStepper } from '../../components/ui/QuantityStepper'
+import { Skeleton } from '../../components/ui/Skeleton'
+import { Spinner } from '../../components/ui/Spinner'
+import { useToastStore } from '../../store/toast.store'
 
 /** CU-09 Ver detalle de producto. */
 export function ProductDetail() {
@@ -23,9 +27,10 @@ export function ProductDetail() {
   // informa el máximo y el usuario decide dejar esa cantidad o cancelar —
   // nunca se ajusta solo.
   const [excessPrompt, setExcessPrompt] = useState<{ requested: number; max: number } | null>(null)
-  const [addedMessage, setAddedMessage] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const showToast = useToastStore((s) => s.show)
 
-  if (isLoading) return <main className="px-4 py-8 text-center">Cargando…</main>
+  if (isLoading) return <ProductDetailSkeleton />
   if (isError || !product) {
     // CU-09 (flujo 2a): producto inexistente o no publicado.
     return (
@@ -54,21 +59,35 @@ export function ProductDetail() {
 
   /** @usecase CU-02 Agregar producto al carrito */
   const handleAddToCart = async () => {
-    setAddedMessage(null)
-    if (isAuthenticated) {
-      try {
-        await addItem.mutateAsync({ variantId: selectedVariant.id, quantity })
-        setAddedMessage('Se agregó al carrito.')
-      } catch (err) {
-        const data = (err as { response?: { data?: InsufficientStockError } })?.response?.data
-        // CU-02 (flujo 3a): informar el máximo, nunca ajustar solo.
-        if (data?.code === 'INSUFFICIENT_STOCK') {
-          setExcessPrompt({ requested: quantity, max: data.maxAvailable })
-        }
-      }
-      return
-    }
+    const notifyAdded = () =>
+      showToast(`Agregaste ${product.name} al carrito.`, 'success', { label: 'Ver carrito', to: '/cart' })
 
+    setAdding(true)
+    try {
+      if (isAuthenticated) {
+        await addToServerCart(notifyAdded)
+      } else {
+        await addToGuestCart(notifyAdded)
+      }
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  const addToServerCart = async (notifyAdded: () => void) => {
+    try {
+      await addItem.mutateAsync({ variantId: selectedVariant.id, quantity })
+      notifyAdded()
+    } catch (err) {
+      const data = (err as { response?: { data?: InsufficientStockError } })?.response?.data
+      // CU-02 (flujo 3a): informar el máximo, nunca ajustar solo.
+      if (data?.code === 'INSUFFICIENT_STOCK') {
+        setExcessPrompt({ requested: quantity, max: data.maxAvailable })
+      }
+    }
+  }
+
+  const addToGuestCart = async (notifyAdded: () => void) => {
     const result = await guestCart.addItem(
       selectedVariant.id,
       product.id,
@@ -79,7 +98,7 @@ export function ProductDetail() {
     if (result.outcome === 'insufficient_stock') {
       setExcessPrompt({ requested: quantity, max: result.maxAvailable ?? 0 })
     } else if (result.outcome === 'ok') {
-      setAddedMessage('Se agregó al carrito.')
+      notifyAdded()
     }
   }
 
@@ -174,13 +193,11 @@ export function ProductDetail() {
 
           <div className="mt-4">
             <p className="mb-1 text-sm font-medium text-neutral-700">Cantidad</p>
-            <input
-              type="number"
-              min={1}
+            <QuantityStepper
               value={quantity}
+              onChange={requestQuantity}
+              max={selectedVariant.stockAvailable}
               disabled={selectedVariant.isOutOfStock}
-              onChange={(e) => requestQuantity(Number(e.target.value))}
-              className="w-24 rounded border border-neutral-300 px-3 py-2"
             />
             {excessPrompt && (
               <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm">
@@ -206,15 +223,18 @@ export function ProductDetail() {
             )}
           </div>
 
-          <button
-            type="button"
-            disabled={selectedVariant.isOutOfStock || !!excessPrompt}
-            onClick={handleAddToCart}
-            className="mt-6 w-full rounded bg-neutral-800 py-2 text-white disabled:opacity-50"
-          >
-            Agregar al carrito
-          </button>
-          {addedMessage && <p className="mt-2 text-sm text-green-700">{addedMessage}</p>}
+          {/* En mobile el botón queda pegado abajo mientras se scrollea la ficha. */}
+          <div className="sticky bottom-0 -mx-4 mt-6 border-t border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+            <button
+              type="button"
+              disabled={selectedVariant.isOutOfStock || !!excessPrompt || adding}
+              onClick={handleAddToCart}
+              className="flex w-full items-center justify-center gap-2 rounded bg-neutral-800 py-3 font-medium text-white disabled:opacity-50"
+            >
+              {adding && <Spinner />}
+              {selectedVariant.isOutOfStock ? 'Sin stock' : adding ? 'Agregando…' : 'Agregar al carrito'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -228,6 +248,25 @@ export function ProductDetail() {
           </div>
         </section>
       )}
+    </main>
+  )
+}
+
+/** Lugar reservado de la ficha mientras carga. */
+function ProductDetailSkeleton() {
+  return (
+    <main className="mx-auto max-w-5xl px-4 py-8" aria-busy="true" aria-label="Cargando producto">
+      <Skeleton className="h-4 w-32" />
+      <div className="mt-4 grid grid-cols-1 gap-8 md:grid-cols-2">
+        <Skeleton className="aspect-square w-full rounded-lg" />
+        <div className="space-y-3">
+          <Skeleton className="h-7 w-3/4" />
+          <Skeleton className="h-4 w-1/4" />
+          <Skeleton className="h-6 w-1/3" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="mt-6 h-11 w-full" />
+        </div>
+      </div>
     </main>
   )
 }

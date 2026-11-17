@@ -84,5 +84,14 @@ TODO:
 - mensajes genéricos en login (ahora dice contraseña/correo inválido)
 - mostrar vía toast el mensaje de "cuenta bloqueada por 15 minutos" en frontend
 - mostrar cuadro de confirmación para otorgar permisos de administrador
-- bugfix hover catálogo - ubuntu linux firefox (el zoom de la imagen y la sombra de las tarjetas funcionan con la pantalla táctil pero no con el mouse; ver `frontend/src/components/catalog/ProductCard.tsx`)
--  
+
+BUGFIXES:
+
+prioridad alta:
+    - 
+
+prioridad media:
+    - producto no se deshabilita al reservar totalmente el stock, solo muestra mensaje al momento de agregar al carrito, mejora UX (severidad media)
+
+prioridad Baja:
+    - bugfix hover catálogo: ubuntu linux firefox (el zoom de la imagen y la sombra de las tarjetas funcionan con la pantalla táctil pero no con el mouse; ver `frontend/src/components/catalog/ProductCard.tsx`) (severidad baja)

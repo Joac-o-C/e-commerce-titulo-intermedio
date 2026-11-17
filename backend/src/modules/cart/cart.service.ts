@@ -25,6 +25,8 @@ export interface CartItemView {
   id: string;
   productId: string;
   productName: string;
+  /** Primera imagen del producto (por `order`), para la miniatura del carrito; `null` si no tiene. */
+  mainImageUrl: string | null;
   variantId: string;
   variantAttributes: Record<string, string>;
   quantity: number;
@@ -32,6 +34,8 @@ export interface CartItemView {
   subtotal: string;
   isUnavailable: boolean;
   isOutOfStock: boolean;
+  /** Unidades que se pueden tener en el carrito (0 si no está disponible), para limitar el selector de cantidad. */
+  stockAvailable: number;
   priceChanged: boolean;
 }
 
@@ -92,7 +96,7 @@ export class CartService {
     const cart = await this.getOrCreateCart(userId);
     const items = await this.itemRepo.find({
       where: { cartId: cart.id },
-      relations: { product: true, variant: { product: true } },
+      relations: { product: { images: true }, variant: { product: true } },
       order: { addedAt: 'ASC' },
     });
     const views = items.map((item) => this.toItemView(item));
@@ -385,6 +389,7 @@ export class CartService {
       id: item.id,
       productId: item.productId,
       productName: item.product.name,
+      mainImageUrl: [...(item.product.images ?? [])].sort((a, b) => a.order - b.order)[0]?.url ?? null,
       variantId: item.variantId,
       variantAttributes: item.variant.attributes,
       quantity: item.quantity,
@@ -392,6 +397,7 @@ export class CartService {
       subtotal: fromCents(toCents(item.unitPriceSnapshot) * item.quantity),
       isUnavailable,
       isOutOfStock,
+      stockAvailable: isUnavailable ? 0 : Math.max(0, item.variant.stockAvailable),
       // Sólo informativo en la vista: el precio real se actualiza al
       // modificar la cantidad (CU-11, flujo 7), no con sólo mirar el carrito.
       priceChanged: currentPrice !== item.unitPriceSnapshot,

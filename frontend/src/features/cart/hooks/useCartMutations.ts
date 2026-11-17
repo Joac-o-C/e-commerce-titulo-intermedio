@@ -20,7 +20,9 @@ export function useCartMutations() {
   const updateItem = useMutation({
     mutationFn: ({ itemId, quantity }: { itemId: string; quantity: number }) =>
       cartService.updateItem(itemId, quantity),
-    onSuccess: invalidate,
+    // También al fallar: si el stock cambió (409), el carrito se refresca con
+    // el disponible nuevo y el selector se limita solo.
+    onSettled: invalidate,
   })
 
   const removeItem = useMutation({

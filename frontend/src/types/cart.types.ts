@@ -3,6 +3,7 @@ export interface CartItem {
   id: string
   productId: string
   productName: string
+  mainImageUrl: string | null
   variantId: string
   variantAttributes: Record<string, string>
   quantity: number
@@ -10,6 +11,7 @@ export interface CartItem {
   subtotal: string
   isUnavailable: boolean
   isOutOfStock: boolean
+  stockAvailable: number
   priceChanged: boolean
 }
 
