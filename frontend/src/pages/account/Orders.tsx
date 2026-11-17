@@ -10,6 +10,7 @@ import {
   formatDate,
 } from '../../features/orders/order-labels'
 import type { OrderListFilters, OrderStatus } from '../../types/order.types'
+import { formatPrice } from '../../lib/format'
 
 /**
  * CU-13 Ver mis pedidos (listado). Los filtros viven en la URL para que
@@ -90,7 +91,7 @@ export function Orders() {
                   <span className="font-medium text-neutral-800">Pedido #{order.orderNumber}</span>
                   <span className="text-neutral-600">{formatDate(order.createdAt)}</span>
                   <span className="text-neutral-600">
-                    {order.itemCount} {order.itemCount === 1 ? 'producto' : 'productos'} · ${order.total}
+                    {order.itemCount} {order.itemCount === 1 ? 'producto' : 'productos'} · {formatPrice(order.total)}
                   </span>
                   <span className="text-neutral-600">Pago: {PAYMENT_STATUS_LABELS[order.paymentStatus]}</span>
                   <span className="sm:text-right">
@@ -203,7 +204,7 @@ function OrderFilters({ initial, onApply }: { initial: FilterValues; onApply: (p
         />
       </label>
       <div className="flex items-end gap-2">
-        <button type="submit" className="rounded bg-neutral-800 px-3 py-1.5 text-white">
+        <button type="submit" className="rounded bg-primary hover:bg-primary-hover px-3 py-1.5 text-on-primary">
           Buscar
         </button>
         {hasFilters && (

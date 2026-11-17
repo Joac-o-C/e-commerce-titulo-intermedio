@@ -5,6 +5,7 @@ import { formatAttributes, RETURN_CONDITION_LABELS } from '../../features/admin/
 import { RETURN_STATUS_LABELS, apiErrorMessage, formatDate, formatDateTime } from '../../features/orders/order-labels'
 import { adminReturnsService } from '../../services/admin-returns.service'
 import type { AdminReturnDetail as Detail, ReturnItemCondition } from '../../types/admin-orders.types'
+import { formatPrice } from '../../lib/format'
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -16,7 +17,7 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 }
 
 const input = 'rounded border border-neutral-300 px-2 py-1.5'
-const primary = 'rounded bg-neutral-800 px-3 py-1.5 text-white disabled:opacity-50'
+const primary = 'rounded bg-primary hover:bg-primary-hover px-3 py-1.5 text-on-primary disabled:opacity-50'
 
 /**
  * CU-22 Resolver solicitud de cambio o devolución (admin): revisar la
@@ -113,7 +114,7 @@ export function AdminReturnDetail() {
                   <td className="py-1.5">
                     {item.productName}
                     <span className="block text-xs text-neutral-500">
-                      {[formatAttributes(item.variantAttributes), `$${item.unitPrice} c/u`].filter(Boolean).join(' · ')}
+                      {[formatAttributes(item.variantAttributes), `${formatPrice(item.unitPrice)} c/u`].filter(Boolean).join(' · ')}
                     </span>
                     {item.condition && (
                       <span className="block text-xs text-neutral-500">
@@ -210,7 +211,7 @@ function ApproveOrReject({ request, onDone }: ActionProps) {
           <textarea
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="Motivo del rechazo (lo ve el Cliente)"
+            placeholder="Motivo del rechazo (lo ve el Cliente)" aria-label="Motivo del rechazo (lo ve el Cliente)"
             maxLength={1000}
             rows={3}
             className={`w-full ${input}`}
@@ -414,7 +415,7 @@ function Receive({ request, onDone }: ActionProps) {
 
         {!exchange && (
           <p className="text-neutral-700">
-            Reembolso a iniciar: <strong>${refundTotal.toFixed(2)}</strong> <span className="text-neutral-500">(sólo productos, sin envío)</span>
+            Reembolso a iniciar: <strong>{formatPrice(refundTotal)}</strong> <span className="text-neutral-500">(sólo productos, sin envío)</span>
           </p>
         )}
         {exchange && <p className="text-neutral-700">Cambio: no hay reembolso; la reposición queda pendiente de despacho.</p>}
@@ -457,8 +458,8 @@ function DispatchReplacement({ request, onDone }: ActionProps) {
       }}
       className="mt-3 flex flex-wrap items-end gap-2 border-t border-neutral-100 pt-3"
     >
-      <input value={carrier} onChange={(e) => setCarrier(e.target.value)} placeholder="Transportista (opcional)" maxLength={100} className={input} />
-      <input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="Seguimiento (opcional)" maxLength={100} className={input} />
+      <input value={carrier} onChange={(e) => setCarrier(e.target.value)} placeholder="Transportista (opcional)" aria-label="Transportista (opcional)" maxLength={100} className={input} />
+      <input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="Seguimiento (opcional)" aria-label="Seguimiento (opcional)" maxLength={100} className={input} />
       <button type="submit" disabled={dispatch.isPending} className={primary}>
         Marcar despachada
       </button>

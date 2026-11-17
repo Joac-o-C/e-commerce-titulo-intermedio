@@ -5,6 +5,12 @@ import { useCartMutations } from '../../features/cart/hooks/useCartMutations'
 import { useGuestCart } from '../../features/cart/hooks/useGuestCart'
 import { useAuthStore } from '../../store/auth.store'
 import type { InsufficientStockError } from '../../types/cart.types'
+import { formatPrice } from '../../lib/format'
+import { ProductCard } from '../../components/catalog/ProductCard'
+import { QuantityStepper } from '../../components/ui/QuantityStepper'
+import { Skeleton } from '../../components/ui/Skeleton'
+import { Spinner } from '../../components/ui/Spinner'
+import { useToastStore } from '../../store/toast.store'
 
 /** CU-09 Ver detalle de producto. */
 export function ProductDetail() {
@@ -21,9 +27,10 @@ export function ProductDetail() {
   // informa el máximo y el usuario decide dejar esa cantidad o cancelar —
   // nunca se ajusta solo.
   const [excessPrompt, setExcessPrompt] = useState<{ requested: number; max: number } | null>(null)
-  const [addedMessage, setAddedMessage] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const showToast = useToastStore((s) => s.show)
 
-  if (isLoading) return <main className="px-4 py-8 text-center">Cargando…</main>
+  if (isLoading) return <ProductDetailSkeleton />
   if (isError || !product) {
     // CU-09 (flujo 2a): producto inexistente o no publicado.
     return (
@@ -52,21 +59,35 @@ export function ProductDetail() {
 
   /** @usecase CU-02 Agregar producto al carrito */
   const handleAddToCart = async () => {
-    setAddedMessage(null)
-    if (isAuthenticated) {
-      try {
-        await addItem.mutateAsync({ variantId: selectedVariant.id, quantity })
-        setAddedMessage('Se agregó al carrito.')
-      } catch (err) {
-        const data = (err as { response?: { data?: InsufficientStockError } })?.response?.data
-        // CU-02 (flujo 3a): informar el máximo, nunca ajustar solo.
-        if (data?.code === 'INSUFFICIENT_STOCK') {
-          setExcessPrompt({ requested: quantity, max: data.maxAvailable })
-        }
-      }
-      return
-    }
+    const notifyAdded = () =>
+      showToast(`Agregaste ${product.name} al carrito.`, 'success', { label: 'Ver carrito', to: '/cart' })
 
+    setAdding(true)
+    try {
+      if (isAuthenticated) {
+        await addToServerCart(notifyAdded)
+      } else {
+        await addToGuestCart(notifyAdded)
+      }
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  const addToServerCart = async (notifyAdded: () => void) => {
+    try {
+      await addItem.mutateAsync({ variantId: selectedVariant.id, quantity })
+      notifyAdded()
+    } catch (err) {
+      const data = (err as { response?: { data?: InsufficientStockError } })?.response?.data
+      // CU-02 (flujo 3a): informar el máximo, nunca ajustar solo.
+      if (data?.code === 'INSUFFICIENT_STOCK') {
+        setExcessPrompt({ requested: quantity, max: data.maxAvailable })
+      }
+    }
+  }
+
+  const addToGuestCart = async (notifyAdded: () => void) => {
     const result = await guestCart.addItem(
       selectedVariant.id,
       product.id,
@@ -77,7 +98,7 @@ export function ProductDetail() {
     if (result.outcome === 'insufficient_stock') {
       setExcessPrompt({ requested: quantity, max: result.maxAvailable ?? 0 })
     } else if (result.outcome === 'ok') {
-      setAddedMessage('Se agregó al carrito.')
+      notifyAdded()
     }
   }
 
@@ -111,7 +132,7 @@ export function ProductDetail() {
                   <img
                     src={img.url}
                     alt=""
-                    className={`h-16 w-16 rounded object-cover ${i === selectedImage ? 'ring-2 ring-neutral-800' : ''}`}
+                    className={`h-16 w-16 rounded object-cover ${i === selectedImage ? 'ring-2 ring-primary' : ''}`}
                   />
                 </button>
               ))}
@@ -122,7 +143,7 @@ export function ProductDetail() {
         <div>
           <h1 className="text-2xl font-semibold text-neutral-800">{product.name}</h1>
           {product.brand && <p className="text-sm text-neutral-500">{product.brand}</p>}
-          <p className="mt-2 text-xl font-medium text-neutral-800">${product.price}</p>
+          <p className="mt-2 text-xl font-medium text-neutral-800">{formatPrice(product.price)}</p>
           <p className="mt-1 text-sm text-neutral-600">{product.description}</p>
 
           {product.categories.length > 0 && (
@@ -159,7 +180,7 @@ export function ProductDetail() {
                     }}
                     className={`rounded border px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-40 ${
                       selectedVariant.id === v.id
-                        ? 'border-neutral-800 bg-neutral-800 text-white'
+                        ? 'border-primary bg-primary text-on-primary'
                         : 'border-neutral-300'
                     }`}
                   >
@@ -172,13 +193,11 @@ export function ProductDetail() {
 
           <div className="mt-4">
             <p className="mb-1 text-sm font-medium text-neutral-700">Cantidad</p>
-            <input
-              type="number"
-              min={1}
+            <QuantityStepper
               value={quantity}
+              onChange={requestQuantity}
+              max={selectedVariant.stockAvailable}
               disabled={selectedVariant.isOutOfStock}
-              onChange={(e) => requestQuantity(Number(e.target.value))}
-              className="w-24 rounded border border-neutral-300 px-3 py-2"
             />
             {excessPrompt && (
               <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm">
@@ -204,15 +223,18 @@ export function ProductDetail() {
             )}
           </div>
 
-          <button
-            type="button"
-            disabled={selectedVariant.isOutOfStock || !!excessPrompt}
-            onClick={handleAddToCart}
-            className="mt-6 w-full rounded bg-neutral-800 py-2 text-white disabled:opacity-50"
-          >
-            Agregar al carrito
-          </button>
-          {addedMessage && <p className="mt-2 text-sm text-green-700">{addedMessage}</p>}
+          {/* En mobile el botón queda pegado abajo mientras se scrollea la ficha. */}
+          <div className="sticky bottom-0 -mx-4 mt-6 border-t border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+            <button
+              type="button"
+              disabled={selectedVariant.isOutOfStock || !!excessPrompt || adding}
+              onClick={handleAddToCart}
+              className="flex w-full items-center justify-center gap-2 rounded bg-primary hover:bg-primary-hover py-3 font-medium text-on-primary disabled:opacity-50"
+            >
+              {adding && <Spinner />}
+              {selectedVariant.isOutOfStock ? 'Sin stock' : adding ? 'Agregando…' : 'Agregar al carrito'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -221,23 +243,30 @@ export function ProductDetail() {
           <h2 className="text-lg font-semibold text-neutral-800">Productos relacionados</h2>
           <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
             {product.relatedProducts.map((p) => (
-              <Link
-                key={p.id}
-                to={`/products/${p.id}`}
-                className="rounded-lg border border-neutral-200 bg-white p-3 hover:shadow"
-              >
-                <div className="aspect-square overflow-hidden rounded bg-neutral-100">
-                  {p.mainImageUrl && (
-                    <img src={p.mainImageUrl} alt={p.name} className="h-full w-full object-cover" />
-                  )}
-                </div>
-                <p className="mt-2 truncate text-sm font-medium text-neutral-800">{p.name}</p>
-                <p className="text-sm text-neutral-600">${p.price}</p>
-              </Link>
+              <ProductCard key={p.id} product={p} />
             ))}
           </div>
         </section>
       )}
+    </main>
+  )
+}
+
+/** Lugar reservado de la ficha mientras carga. */
+function ProductDetailSkeleton() {
+  return (
+    <main className="mx-auto max-w-5xl px-4 py-8" aria-busy="true" aria-label="Cargando producto">
+      <Skeleton className="h-4 w-32" />
+      <div className="mt-4 grid grid-cols-1 gap-8 md:grid-cols-2">
+        <Skeleton className="aspect-square w-full rounded-lg" />
+        <div className="space-y-3">
+          <Skeleton className="h-7 w-3/4" />
+          <Skeleton className="h-4 w-1/4" />
+          <Skeleton className="h-6 w-1/3" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="mt-6 h-11 w-full" />
+        </div>
+      </div>
     </main>
   )
 }

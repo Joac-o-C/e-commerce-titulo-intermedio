@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { authService } from '../../services/auth.service'
 import { ProgressBar } from '../../components/ui/ProgressBar'
 import { SubmitButton } from '../../components/ui/SubmitButton'
+import { TextField } from '../../components/ui/TextField'
 
 /** CU-08 Recuperar contraseña (sub-flujo Solicitar). */
 export function ForgotPassword() {
@@ -28,7 +29,7 @@ export function ForgotPassword() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+    <main className="flex justify-center px-4 py-12 sm:py-16">
       <form
         onSubmit={handleSubmit}
         aria-busy={isSubmitting}
@@ -38,13 +39,18 @@ export function ForgotPassword() {
         <fieldset disabled={isSubmitting} className="space-y-4 p-6">
           <h1 className="text-xl font-semibold text-neutral-800">Recuperar contraseña</h1>
 
-          <input
+          <p className="text-sm text-neutral-600">
+            Te mandamos un enlace para que elijas una contraseña nueva.
+          </p>
+
+          <TextField
+            label="Email de tu cuenta"
             type="email"
             required
+            autoComplete="email"
+            placeholder="nombre@correo.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-            className="w-full rounded border border-neutral-300 px-3 py-2"
           />
 
           {message && <p className="text-sm text-neutral-700">{message}</p>}

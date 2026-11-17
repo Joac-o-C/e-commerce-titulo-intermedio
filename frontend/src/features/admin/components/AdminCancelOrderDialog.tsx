@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { AdminCancelReason, AdminOrderDetail } from '../../../types/admin-orders.types'
 import { ADMIN_CANCEL_REASON_LABELS } from '../admin-labels'
+import { formatPrice } from '../../../lib/format'
 
 interface Props {
   order: AdminOrderDetail
@@ -35,8 +36,8 @@ export function AdminCancelOrderDialog({ order, pending, error, onConfirm, onClo
           )}
           {order.paidAt ? (
             <li>
-              Se reembolsa ${refundAmount} al Cliente
-              {dispatched && ` (el total sin el envío de $${order.shippingCost})`}.
+              Se reembolsa {formatPrice(refundAmount)} al Cliente
+              {dispatched && ` (el total sin el envío de ${formatPrice(order.shippingCost)})`}.
             </li>
           ) : (
             <li>No hay pago acreditado: no hay nada que reembolsar.</li>

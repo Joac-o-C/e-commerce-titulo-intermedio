@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { adminStockService } from '../../services/admin-stock.service'
 import { Table } from '../../components/ui/Table'
+import { formatDateTime } from '../../features/orders/order-labels'
 import type { AdjustStockInput, ManualStockMovementType, StockItem, StockMovementType } from '../../types/stock.types'
 
 function extractErrorMessage(err: unknown, fallback: string): string {
@@ -190,14 +191,14 @@ export function AdminStock() {
               min={0}
               value={adjustForm.quantity}
               onChange={(e) => setAdjustForm({ ...adjustForm, quantity: Number(e.target.value) })}
-              placeholder="Cantidad"
+              placeholder="Cantidad" aria-label="Cantidad"
               className="w-full rounded border border-neutral-300 px-3 py-2"
               required
             />
             <input
               value={adjustForm.reason}
               onChange={(e) => setAdjustForm({ ...adjustForm, reason: e.target.value })}
-              placeholder="Motivo"
+              placeholder="Motivo" aria-label="Motivo"
               className="w-full rounded border border-neutral-300 px-3 py-2"
               required
             />
@@ -209,7 +210,7 @@ export function AdminStock() {
               <button
                 type="submit"
                 disabled={adjustMutation.isPending}
-                className="rounded bg-neutral-800 px-4 py-2 text-sm text-white disabled:opacity-50"
+                className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary disabled:opacity-50"
               >
                 Aplicar
               </button>
@@ -230,7 +231,7 @@ export function AdminStock() {
                     {m.resultingStockTotal}
                   </p>
                   <p className="text-neutral-500">
-                    {new Date(m.createdAt).toLocaleString()} ·{' '}
+                    {formatDateTime(m.createdAt)} ·{' '}
                     {m.actor ? `${m.actor.firstName} ${m.actor.lastName}` : 'Sistema'}
                   </p>
                   {m.reason && <p className="text-neutral-600">{m.reason}</p>}
@@ -266,7 +267,7 @@ export function AdminStock() {
               min={0}
               value={thresholdValue}
               onChange={(e) => setThresholdValue(e.target.value)}
-              placeholder="Dejar vacío para usar el default (5)"
+              placeholder="Dejar vacío para usar el default (5)" aria-label="Umbral de stock bajo (vacío = 5)"
               className="w-full rounded border border-neutral-300 px-3 py-2"
             />
             <div className="flex justify-end gap-3">
@@ -275,7 +276,7 @@ export function AdminStock() {
               </button>
               <button
                 type="submit"
-                className="rounded bg-neutral-800 px-4 py-2 text-sm text-white"
+                className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary"
               >
                 Guardar
               </button>

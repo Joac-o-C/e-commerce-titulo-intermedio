@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { authService } from '../../services/auth.service'
 import { ProgressBar } from '../../components/ui/ProgressBar'
 import { SubmitButton } from '../../components/ui/SubmitButton'
+import { PasswordField } from '../../components/ui/PasswordField'
 import { PASSWORD_POLICY_MESSAGE, PASSWORD_POLICY_REGEX } from './password-policy'
 
 const schema = z
@@ -54,7 +55,7 @@ export function ResetPassword() {
 
   if (done) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+      <main className="flex justify-center px-4 py-12 sm:py-16">
         <div className="max-w-sm text-center space-y-3">
           <p className="text-neutral-800">Contraseña actualizada, ya podés iniciar sesión.</p>
           <Link to="/login" className="underline text-sm">Ir a iniciar sesión</Link>
@@ -64,7 +65,7 @@ export function ResetPassword() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+    <main className="flex justify-center px-4 py-12 sm:py-16">
       <form
         onSubmit={handleSubmit(onSubmit)}
         aria-busy={isSubmitting}
@@ -74,27 +75,20 @@ export function ResetPassword() {
         <fieldset disabled={isSubmitting} className="space-y-4 p-6">
           <h1 className="text-xl font-semibold text-neutral-800">Nueva contraseña</h1>
 
-          <div>
-            <input
-              {...register('password')}
-              type="password"
-              placeholder="Nueva contraseña"
-              className="w-full rounded border border-neutral-300 px-3 py-2"
-            />
-            {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
-          </div>
+          <PasswordField
+            {...register('password')}
+            label="Nueva contraseña"
+            autoComplete="new-password"
+            hint="Mínimo 8 caracteres, con una mayúscula y un número."
+            error={errors.password?.message}
+          />
 
-          <div>
-            <input
-              {...register('passwordConfirmation')}
-              type="password"
-              placeholder="Confirmar contraseña"
-              className="w-full rounded border border-neutral-300 px-3 py-2"
-            />
-            {errors.passwordConfirmation && (
-              <p className="text-sm text-red-600">{errors.passwordConfirmation.message}</p>
-            )}
-          </div>
+          <PasswordField
+            {...register('passwordConfirmation')}
+            label="Repetir contraseña"
+            autoComplete="new-password"
+            error={errors.passwordConfirmation?.message}
+          />
 
           {serverError && <p className="text-sm text-red-600">{serverError}</p>}
 

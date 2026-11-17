@@ -76,7 +76,7 @@ export class AuthService {
     const passwordOk = user ? await this.usersService.verifyPassword(user, password) : false;
     if (!user || !passwordOk) {
       await this.loginThrottle.recordAttempt(email, ip, false);
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new UnauthorizedException('El email o la contraseña no son correctos');
     }
 
     // CU-06 (flujo 7a): cuenta pendiente de verificación, no inicia sesión.

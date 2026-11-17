@@ -17,11 +17,15 @@ const CONFIG: Record<string, number> = {
 
 describe('LoginThrottleService', () => {
   let service: LoginThrottleService;
-  let repo: { count: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn>; save: ReturnType<typeof vi.fn> };
+  let repo: {
+    count: ReturnType<typeof vi.fn>;
+    find: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>; save: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     repo = {
       count: vi.fn().mockResolvedValue(0),
+      find: vi.fn().mockResolvedValue([]),
       create: vi.fn((data) => data),
       save: vi.fn().mockResolvedValue(undefined),
     };
@@ -56,6 +60,36 @@ describe('LoginThrottleService', () => {
       await expect(service.assertNotLocked('user@example.com', '1.2.3.4')).rejects.toBeInstanceOf(
         IpLockedException,
       );
+    });
+
+    it('5a: informa cuántos minutos faltan para el desbloqueo de la cuenta', async () => {
+      vi.useFakeTimers({ now: new Date('2026-01-01T12:00:00Z') });
+      repo.count.mockResolvedValueOnce(5);
+      // El 5º fallo más reciente fue hace 10 min: sale de la ventana de 15 en 5.
+      repo.find.mockResolvedValueOnce([{ createdAt: new Date('2026-01-01T11:50:00Z') }]);
+
+      const error = await service.assertNotLocked('user@example.com', '1.2.3.4').catch((e: unknown) => e);
+      vi.useRealTimers();
+
+      expect(error).toBeInstanceOf(AccountLockedException);
+      expect((error as AccountLockedException).getResponse()).toMatchObject({
+        code: 'ACCOUNT_LOCKED',
+        retryAfterMinutes: 5,
+      });
+      expect(repo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { email: 'user@example.com', success: false }, skip: 4, take: 1 }),
+      );
+    });
+
+    it('5a: nunca informa menos de 1 minuto', async () => {
+      vi.useFakeTimers({ now: new Date('2026-01-01T12:00:00Z') });
+      repo.count.mockResolvedValueOnce(0).mockResolvedValueOnce(20);
+      repo.find.mockResolvedValueOnce([{ createdAt: new Date('2026-01-01T11:45:10Z') }]);
+
+      const error = await service.assertNotLocked('user@example.com', '1.2.3.4').catch((e: unknown) => e);
+      vi.useRealTimers();
+
+      expect((error as IpLockedException).getResponse()).toMatchObject({ code: 'IP_LOCKED', retryAfterMinutes: 1 });
     });
 
     it('registra cada intento con su resultado', async () => {

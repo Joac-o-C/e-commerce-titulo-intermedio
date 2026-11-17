@@ -4,15 +4,30 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThanOrEqual, Repository } from 'typeorm';
 import { LoginAttempt } from '../entities/login-attempt.entity.js';
 
+const lockMessage = (minutes: number) =>
+  `Por seguridad, bloqueamos el inicio de sesión por varios intentos fallidos. Probá de nuevo en ${minutes} ${
+    minutes === 1 ? 'minuto' : 'minutos'
+  }.`;
+
+/**
+ * CU-06 (flujo 5a): el cuerpo lleva `retryAfterMinutes` para que el front
+ * pueda decir cuánto falta sin adivinar la configuración del bloqueo.
+ */
 export class AccountLockedException extends HttpException {
-  constructor() {
-    super('Cuenta bloqueada temporalmente por intentos fallidos', HttpStatus.TOO_MANY_REQUESTS);
+  constructor(retryAfterMinutes: number) {
+    super(
+      { statusCode: HttpStatus.TOO_MANY_REQUESTS, code: 'ACCOUNT_LOCKED', message: lockMessage(retryAfterMinutes), retryAfterMinutes },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
 }
 
 export class IpLockedException extends HttpException {
-  constructor() {
-    super('Origen bloqueado temporalmente por intentos fallidos', HttpStatus.TOO_MANY_REQUESTS);
+  constructor(retryAfterMinutes: number) {
+    super(
+      { statusCode: HttpStatus.TOO_MANY_REQUESTS, code: 'IP_LOCKED', message: lockMessage(retryAfterMinutes), retryAfterMinutes },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
 }
 
@@ -51,7 +66,9 @@ export class LoginThrottleService {
     });
     // CU-06 (flujo 5a): cuenta bloqueada, no evalúa credenciales.
     if (accountFailures >= this.accountMaxAttempts) {
-      throw new AccountLockedException();
+      throw new AccountLockedException(
+        await this.minutesUntilUnlock({ email }, this.accountMaxAttempts, this.accountWindowMin),
+      );
     }
 
     const ipWindowStart = new Date(Date.now() - this.ipWindowMin * 60_000);
@@ -60,8 +77,31 @@ export class LoginThrottleService {
     });
     // CU-06 (flujo 5a): IP bloqueada, no evalúa credenciales.
     if (ipFailures >= this.ipMaxAttempts) {
-      throw new IpLockedException();
+      throw new IpLockedException(
+        await this.minutesUntilUnlock({ ipAddress: ip }, this.ipMaxAttempts, this.ipWindowMin),
+      );
     }
+  }
+
+  /**
+   * La ventana es deslizante: se desbloquea cuando sale de la ventana el
+   * fallo que hace que haya `maxAttempts` (el `maxAttempts`-ésimo más
+   * reciente). Mientras está bloqueado no se registran intentos nuevos.
+   */
+  private async minutesUntilUnlock(
+    where: { email: string } | { ipAddress: string },
+    maxAttempts: number,
+    windowMin: number,
+  ): Promise<number> {
+    const [failure] = await this.repo.find({
+      where: { ...where, success: false },
+      order: { createdAt: 'DESC' },
+      skip: maxAttempts - 1,
+      take: 1,
+    });
+    if (!failure) return windowMin;
+    const unlockAt = failure.createdAt.getTime() + windowMin * 60_000;
+    return Math.max(1, Math.ceil((unlockAt - Date.now()) / 60_000));
   }
 
   async recordAttempt(email: string, ip: string, success: boolean): Promise<void> {

@@ -6,6 +6,7 @@ import { formatShippingCost } from '../../features/orders/order-labels'
 import { addressesService } from '../../services/addresses.service'
 import { checkoutService } from '../../services/checkout.service'
 import type { CheckoutAdjustment, CheckoutProblem } from '../../types/order.types'
+import { formatPrice } from '../../lib/format'
 
 type ApiError = { response?: { status?: number; data?: { code?: string; message?: string | string[]; problems?: CheckoutProblem[] } } }
 
@@ -22,7 +23,7 @@ function describeAdjustment(a: CheckoutAdjustment): string {
     case 'quantity_reduced':
       return `${a.productName}: sólo quedan ${a.to} unidades, se ajustó la cantidad (tenías ${a.from}).`
     case 'price_updated':
-      return `${a.productName}: el precio cambió de $${a.from} a $${a.to}.`
+      return `${a.productName}: el precio cambió de ${formatPrice(a.from)} a ${formatPrice(a.to)}.`
   }
 }
 
@@ -31,11 +32,11 @@ function describeProblem(p: CheckoutProblem): string {
     case 'unavailable':
       return `${p.productName} ya no está disponible.`
     case 'price_changed':
-      return `${p.productName} cambió de precio ($${p.from} → $${p.to}).`
+      return `${p.productName} cambió de precio (${formatPrice(p.from)} → ${formatPrice(p.to)}).`
     case 'insufficient_stock':
       return `${p.productName} ya no tiene stock suficiente.`
     case 'total_changed':
-      return `El total cambió de $${p.expected} a $${p.actual}.`
+      return `El total cambió de ${formatPrice(p.expected)} a ${formatPrice(p.actual)}.`
   }
 }
 
@@ -281,14 +282,14 @@ export function Checkout() {
                     )}{' '}
                     × {item.quantity}
                   </span>
-                  <span>${item.subtotal}</span>
+                  <span>{formatPrice(item.subtotal)}</span>
                 </li>
               ))}
             </ul>
             <dl className="space-y-1 border-t border-neutral-200 pt-3 text-sm">
               <div className="flex justify-between">
                 <dt className="text-neutral-600">Subtotal</dt>
-                <dd>${quote.data.subtotal}</dd>
+                <dd>{formatPrice(quote.data.subtotal)}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-neutral-600">Envío ({quote.data.shippingMethod.name})</dt>
@@ -296,7 +297,7 @@ export function Checkout() {
               </div>
               <div className="flex justify-between text-base font-semibold">
                 <dt>Total</dt>
-                <dd>${quote.data.total}</dd>
+                <dd>{formatPrice(quote.data.total)}</dd>
               </div>
             </dl>
             <p className="text-sm text-neutral-600">
@@ -322,7 +323,7 @@ export function Checkout() {
           type="button"
           onClick={onConfirm}
           disabled={!quote.data || !adjustmentsAcknowledged || confirm.isPending || confirm.isSuccess}
-          className="w-full rounded bg-neutral-800 py-2 text-white disabled:opacity-50"
+          className="w-full rounded bg-primary hover:bg-primary-hover py-2 text-on-primary disabled:opacity-50"
         >
           {confirm.isPending || confirm.isSuccess ? 'Redirigiendo a MercadoPago…' : 'Confirmar y pagar'}
         </button>

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ordersService } from '../../services/orders.service'
 import type { OrderStatus } from '../../types/order.types'
+import { formatPrice } from '../../lib/format'
 
 const POLL_MS = 5000
 /** ~2 minutos: después, el resultado lo trae el correo (CU-05 paso 9) o recargar la página. */
@@ -98,18 +99,18 @@ export function CheckoutResult() {
               <span>
                 {item.productName} × {item.quantity}
               </span>
-              <span>${item.subtotal}</span>
+              <span>{formatPrice(item.subtotal)}</span>
             </li>
           ))}
         </ul>
         <dl className="mt-3 space-y-1 border-t border-neutral-200 pt-3">
           <div className="flex justify-between">
             <dt className="text-neutral-600">Envío ({order.data.shippingMethod.name})</dt>
-            <dd>${order.data.shippingCost}</dd>
+            <dd>{formatPrice(order.data.shippingCost)}</dd>
           </div>
           <div className="flex justify-between font-semibold">
             <dt>Total</dt>
-            <dd>${order.data.total}</dd>
+            <dd>{formatPrice(order.data.total)}</dd>
           </div>
         </dl>
         <p className="mt-3 text-neutral-600">

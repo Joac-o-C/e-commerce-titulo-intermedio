@@ -34,6 +34,7 @@ export function useGuestCartView() {
     const subtotal = (Number(unitPrice) * item.quantity).toFixed(2)
     return {
       ...item,
+      mainImageUrl: product?.mainImageUrl ?? null,
       unitPrice,
       subtotal,
       isUnavailable,

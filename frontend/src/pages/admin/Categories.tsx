@@ -124,14 +124,14 @@ export function AdminCategories() {
         <input
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="Nombre"
+          placeholder="Nombre" aria-label="Nombre"
           className="w-full rounded border border-neutral-300 px-3 py-2"
           required
         />
         <input
           value={form.description ?? ''}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
-          placeholder="Descripción (opcional)"
+          placeholder="Descripción (opcional)" aria-label="Descripción (opcional)"
           className="w-full rounded border border-neutral-300 px-3 py-2"
         />
         <select
@@ -174,7 +174,7 @@ export function AdminCategories() {
           <button
             type="submit"
             disabled={createMutation.isPending || updateMutation.isPending}
-            className="rounded bg-neutral-800 px-4 py-2 text-sm text-white disabled:opacity-50"
+            className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary disabled:opacity-50"
           >
             {editingId ? 'Guardar cambios' : 'Crear categoría'}
           </button>

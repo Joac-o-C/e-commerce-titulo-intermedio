@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import { productsService } from '../../../services/products.service'
 import type { ProductListFilters } from '../../../types/product.types'
 
@@ -13,6 +13,9 @@ export function useProducts(filters: ProductListFilters) {
     queryKey: ['products', filters],
     queryFn: ({ pageParam }) => productsService.list(filters, pageParam),
     initialPageParam: 0,
+    // Mientras llega el resultado de un filtro nuevo se siguen mostrando los
+    // productos anteriores (atenuados) en vez de vaciar la grilla.
+    placeholderData: keepPreviousData,
     getNextPageParam: (lastPage, allPages) => {
       if (!lastPage.hasMore) return undefined
       return allPages.length * PAGE_SIZE

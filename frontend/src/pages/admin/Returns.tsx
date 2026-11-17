@@ -100,7 +100,7 @@ export function AdminReturns() {
             type="button"
             onClick={() => setParams(new URLSearchParams(view.params))}
             className={`rounded-full border px-3 py-1 ${
-              isCurrent(view.params) ? 'border-neutral-800 bg-neutral-800 text-white' : 'border-neutral-300 bg-white text-neutral-700'
+              isCurrent(view.params) ? 'border-primary bg-primary text-on-primary' : 'border-neutral-300 bg-white text-neutral-700'
             }`}
           >
             {view.label}

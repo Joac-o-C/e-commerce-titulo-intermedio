@@ -177,7 +177,7 @@ export function AdminShippingMethods() {
           </p>
         )}
         <div className="flex gap-2 sm:col-span-4">
-          <button type="submit" disabled={save.isPending} className="rounded bg-neutral-800 px-3 py-1.5 text-white disabled:opacity-50">
+          <button type="submit" disabled={save.isPending} className="rounded bg-primary hover:bg-primary-hover px-3 py-1.5 text-on-primary disabled:opacity-50">
             {editing ? 'Guardar' : 'Crear'}
           </button>
           {editing && (

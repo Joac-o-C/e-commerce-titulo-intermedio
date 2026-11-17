@@ -2,3 +2,9 @@
 # .env NO se versiona (ver .gitignore).
 
 VITE_API_URL=http://localhost:3000
+
+# Nombre de la tienda que se ve en el header, el footer y la pestaña (opcional).
+VITE_STORE_NAME=Tienda
+
+# Muestra el botón "Tema" para comparar las propuestas visuales (true/false).
+VITE_THEME_SELECTION=false

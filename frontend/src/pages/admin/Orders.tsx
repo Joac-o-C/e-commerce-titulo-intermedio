@@ -16,6 +16,7 @@ import {
 import { adminOrdersService } from '../../services/admin-orders.service'
 import type { AdminOrderFilters, AdminOrderRow, AdminOrderSort } from '../../types/admin-orders.types'
 import type { CustomerPaymentStatus, OrderStatus } from '../../types/order.types'
+import { formatPrice, plural } from '../../lib/format'
 
 const FILTER_KEYS = ['number', 'customer', 'status', 'paymentStatus', 'from', 'to', 'refunds', 'sort'] as const
 type FilterValues = Record<(typeof FILTER_KEYS)[number], string>
@@ -94,7 +95,7 @@ export function AdminOrders() {
       ),
     },
     { header: 'Productos', render: (o) => o.itemCount, className: 'text-right' },
-    { header: 'Total', render: (o) => `$${o.total}`, className: 'text-right' },
+    { header: 'Total', render: (o) => formatPrice(o.total), className: 'text-right' },
     { header: 'Pago', render: (o) => PAYMENT_STATUS_LABELS[o.paymentStatus] },
     { header: 'Estado', render: (o) => <OrderStatusBadge status={o.status} /> },
   ]
@@ -117,7 +118,7 @@ export function AdminOrders() {
       {/* Alerta de CU-21 (4a/5a). */}
       {!!data?.refundsNeedingAttention && values.refunds !== 'requieren_gestion' && (
         <p className="rounded border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-          Hay {data.refundsNeedingAttention} reembolso(s) que requieren gestión.{' '}
+          {data.refundsNeedingAttention === 1 ? 'Hay 1 reembolso que requiere gestión.' : `Hay ${data.refundsNeedingAttention} reembolsos que requieren gestión.`}{' '}
           <Link to="/admin/orders?refunds=requieren_gestion" className="underline">
             Ver los pedidos
           </Link>
@@ -131,7 +132,7 @@ export function AdminOrders() {
 
       {data && (
         <section className={`space-y-3 ${query.isFetching ? 'opacity-60' : ''}`}>
-          <p className="text-sm text-neutral-500">{data.total} pedido(s)</p>
+          <p className="text-sm text-neutral-500">{plural(data.total, 'pedido', 'pedidos')}</p>
           <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white">
             <Table columns={columns} rows={data.items} rowKey={(o) => o.id} emptyMessage="Ningún pedido coincide con la búsqueda" />
           </div>
@@ -227,7 +228,7 @@ function AdminOrderFilterForm({ initial, onApply }: { initial: FilterValues; onA
         <span className="text-neutral-700">Reembolsos que requieren gestión</span>
       </label>
       <div className="flex gap-2 sm:col-span-4">
-        <button type="submit" className="rounded bg-neutral-800 px-3 py-1.5 text-white">
+        <button type="submit" className="rounded bg-primary hover:bg-primary-hover px-3 py-1.5 text-on-primary">
           Buscar
         </button>
         {hasFilters && (

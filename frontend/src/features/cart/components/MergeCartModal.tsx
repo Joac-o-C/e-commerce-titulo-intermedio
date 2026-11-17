@@ -81,7 +81,7 @@ export function MergeCartModal({ conflicts, onConfirm, onCancel }: MergeCartModa
           <button
             type="button"
             onClick={handleConfirm}
-            className="rounded bg-neutral-800 px-4 py-2 text-sm text-white"
+            className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary"
           >
             Confirmar
           </button>

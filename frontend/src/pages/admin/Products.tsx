@@ -6,6 +6,7 @@ import { Table } from '../../components/ui/Table'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import type { AdminProduct, AdminProductVariant, ProductFormInput, VariantInput } from '../../types/product.types'
 import type { CategoryNode } from '../../types/category.types'
+import { formatPrice } from '../../lib/format'
 
 function extractErrorMessage(err: unknown, fallback: string): string {
   const message = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data
@@ -246,7 +247,7 @@ export function AdminProducts() {
         <h1 className="text-2xl font-semibold text-neutral-800">Productos</h1>
         <button
           type="button"
-          className="rounded bg-neutral-800 px-4 py-2 text-sm text-white"
+          className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary"
           onClick={() => {
             resetForm()
             setShowForm(true)
@@ -259,7 +260,7 @@ export function AdminProducts() {
       <input
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Buscar por nombre o marca…"
+        placeholder="Buscar por nombre o marca…" aria-label="Buscar por nombre o marca…"
         className="mt-4 w-full max-w-sm rounded border border-neutral-300 px-3 py-2"
       />
 
@@ -273,14 +274,14 @@ export function AdminProducts() {
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Nombre"
+              placeholder="Nombre" aria-label="Nombre"
               className="rounded border border-neutral-300 px-3 py-2"
               required
             />
             <input
               value={form.brand}
               onChange={(e) => setForm({ ...form, brand: e.target.value })}
-              placeholder="Marca (opcional)"
+              placeholder="Marca (opcional)" aria-label="Marca (opcional)"
               className="rounded border border-neutral-300 px-3 py-2"
             />
             <input
@@ -288,7 +289,7 @@ export function AdminProducts() {
               step="0.01"
               value={form.price}
               onChange={(e) => setForm({ ...form, price: e.target.value })}
-              placeholder="Precio"
+              placeholder="Precio" aria-label="Precio"
               className="rounded border border-neutral-300 px-3 py-2"
               required
             />
@@ -296,7 +297,7 @@ export function AdminProducts() {
               type="number"
               value={form.lowStockThreshold}
               onChange={(e) => setForm({ ...form, lowStockThreshold: e.target.value })}
-              placeholder="Umbral de stock bajo (opcional, default 5)"
+              placeholder="Umbral de stock bajo (opcional, default 5)" aria-label="Umbral de stock bajo (opcional, default 5)"
               className="rounded border border-neutral-300 px-3 py-2"
             />
           </div>
@@ -304,7 +305,7 @@ export function AdminProducts() {
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Descripción"
+            placeholder="Descripción" aria-label="Descripción"
             className="w-full rounded border border-neutral-300 px-3 py-2"
             required
           />
@@ -473,7 +474,7 @@ export function AdminProducts() {
             <button
               type="submit"
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="rounded bg-neutral-800 px-4 py-2 text-sm text-white disabled:opacity-50"
+              className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary disabled:opacity-50"
             >
               {editing ? 'Guardar cambios' : 'Crear producto'}
             </button>
@@ -493,7 +494,7 @@ export function AdminProducts() {
             rowKey={(p) => p.id}
             columns={[
               { header: 'Nombre', render: (p) => p.name },
-              { header: 'Precio', render: (p) => `$${p.price}` },
+              { header: 'Precio', render: (p) => formatPrice(p.price) },
               { header: 'Categorías', render: (p) => p.categories.map((c) => c.name).join(', ') },
               {
                 header: 'Stock',

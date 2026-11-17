@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { CreateAddressInput } from '../../../types/address.types'
+import { TextField } from '../../../components/ui/TextField'
 
 const emptyForm: CreateAddressInput = {
   alias: '',
@@ -14,17 +15,30 @@ const emptyForm: CreateAddressInput = {
   isDefault: false,
 }
 
-const FIELDS = [
-  ['alias', 'Alias'],
-  ['street', 'Calle'],
-  ['number', 'Número'],
-  ['floorApt', 'Piso/Depto (opcional)'],
-  ['city', 'Ciudad'],
-  ['province', 'Provincia'],
-  ['postalCode', 'Código postal'],
-  ['phone', 'Teléfono'],
-  ['notes', 'Referencias (opcional)'],
-] as const
+type AddressField = Exclude<keyof CreateAddressInput, 'isDefault'>
+
+interface FieldConfig {
+  field: AddressField
+  label: string
+  placeholder?: string
+  autoComplete?: string
+  inputMode?: 'numeric' | 'tel'
+  optional?: boolean
+  /** Ocupa las dos columnas de la grilla en pantallas medianas o más. */
+  wide?: boolean
+}
+
+const FIELDS: FieldConfig[] = [
+  { field: 'alias', label: 'Nombre de la dirección', placeholder: 'Ej: Casa, Trabajo', wide: true },
+  { field: 'street', label: 'Calle', placeholder: 'Ej: Av. Corrientes', autoComplete: 'address-line1' },
+  { field: 'number', label: 'Número', placeholder: 'Ej: 1234', inputMode: 'numeric' },
+  { field: 'floorApt', label: 'Piso / Depto', placeholder: 'Ej: 3° B', autoComplete: 'address-line2', optional: true },
+  { field: 'postalCode', label: 'Código postal', placeholder: 'Ej: 5000', autoComplete: 'postal-code' },
+  { field: 'city', label: 'Ciudad', autoComplete: 'address-level2' },
+  { field: 'province', label: 'Provincia', autoComplete: 'address-level1' },
+  { field: 'phone', label: 'Teléfono', placeholder: 'Ej: 351 555-1234', autoComplete: 'tel', inputMode: 'tel', wide: true },
+  { field: 'notes', label: 'Referencias para el envío', placeholder: 'Ej: timbre roto, portón verde', optional: true, wide: true },
+]
 
 interface AddressFormProps {
   title?: string
@@ -55,16 +69,21 @@ export function AddressForm({ title = 'Agregar dirección', isPending, error, on
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded border border-neutral-300 bg-white p-4">
       <h2 className="font-medium text-neutral-800">{title}</h2>
-      {FIELDS.map(([field, label]) => (
-        <input
-          key={field}
-          value={form[field] ?? ''}
-          onChange={(e) => setForm({ ...form, [field]: e.target.value })}
-          placeholder={label}
-          required={!['floorApt', 'notes'].includes(field)}
-          className="w-full rounded border border-neutral-300 px-3 py-2"
-        />
-      ))}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {FIELDS.map(({ field, label, placeholder, autoComplete, inputMode, optional, wide }) => (
+          <TextField
+            key={field}
+            label={optional ? `${label} (opcional)` : label}
+            value={form[field] ?? ''}
+            onChange={(e) => setForm({ ...form, [field]: e.target.value })}
+            placeholder={placeholder}
+            autoComplete={autoComplete}
+            inputMode={inputMode}
+            required={!optional}
+            className={wide ? 'sm:col-span-2' : ''}
+          />
+        ))}
+      </div>
       <label className="flex items-center gap-2 text-sm text-neutral-700">
         <input
           type="checkbox"
@@ -78,7 +97,7 @@ export function AddressForm({ title = 'Agregar dirección', isPending, error, on
         <button
           type="submit"
           disabled={isPending}
-          className="rounded bg-neutral-800 px-4 py-2 text-white disabled:opacity-50"
+          className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-on-primary disabled:opacity-50"
         >
           Guardar dirección
         </button>

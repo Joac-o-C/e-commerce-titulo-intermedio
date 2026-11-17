@@ -19,6 +19,7 @@ import {
 import { adminOrdersService } from '../../services/admin-orders.service'
 import type { AdminOrderDetail as Detail, AdminRefund, TrackingInput } from '../../types/admin-orders.types'
 import type { OrderStatus } from '../../types/order.types'
+import { formatPrice } from '../../lib/format'
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -57,14 +58,14 @@ function TrackingFields({ value, onChange }: { value: TrackingDraft; onChange: (
       <input
         value={value.carrier}
         onChange={(e) => onChange({ ...value, carrier: e.target.value })}
-        placeholder="Transportista (opcional)"
+        placeholder="Transportista (opcional)" aria-label="Transportista (opcional)"
         maxLength={100}
         className={field}
       />
       <input
         value={value.number}
         onChange={(e) => onChange({ ...value, number: e.target.value })}
-        placeholder="Número de seguimiento (opcional)"
+        placeholder="Número de seguimiento (opcional)" aria-label="Número de seguimiento (opcional)"
         maxLength={100}
         className={field}
       />
@@ -197,8 +198,8 @@ export function AdminOrderDetail() {
                     )}
                   </td>
                   <td className="whitespace-nowrap py-1.5 pl-4 text-right">{item.quantity}</td>
-                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">${item.unitPrice}</td>
-                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">${item.subtotal}</td>
+                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">{formatPrice(item.unitPrice)}</td>
+                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">{formatPrice(item.subtotal)}</td>
                 </tr>
               ))}
             </tbody>
@@ -207,7 +208,7 @@ export function AdminOrderDetail() {
         <dl className="mt-3 space-y-1 border-t border-neutral-100 pt-3 text-right">
           <div>
             <dt className="inline text-neutral-500">Subtotal: </dt>
-            <dd className="inline">${order.subtotal}</dd>
+            <dd className="inline">{formatPrice(order.subtotal)}</dd>
           </div>
           <div>
             <dt className="inline text-neutral-500">Envío: </dt>
@@ -215,7 +216,7 @@ export function AdminOrderDetail() {
           </div>
           <div className="font-semibold">
             <dt className="inline">Total: </dt>
-            <dd className="inline">${order.total}</dd>
+            <dd className="inline">{formatPrice(order.total)}</dd>
           </div>
         </dl>
       </Card>
@@ -241,7 +242,7 @@ export function AdminOrderDetail() {
             <ul className="mt-2 space-y-1 text-neutral-600">
               {order.payments.map((p) => (
                 <li key={p.id}>
-                  Pago {p.externalPaymentId}: {p.status} · ${p.amount}
+                  Pago {p.externalPaymentId}: {p.status} · {formatPrice(p.amount)}
                   {p.method ? ` · ${p.method}` : ''}
                   {p.installments && p.installments > 1 ? ` en ${p.installments} cuotas` : ''}
                 </li>
@@ -399,7 +400,7 @@ function StatusChanger({ order, onDone, onError }: ActionProps) {
           </p>
         </div>
       )}
-      <button type="submit" disabled={!to || change.isPending} className="rounded bg-neutral-800 px-3 py-1.5 text-white disabled:opacity-50">
+      <button type="submit" disabled={!to || change.isPending} className="rounded bg-primary hover:bg-primary-hover px-3 py-1.5 text-on-primary disabled:opacity-50">
         {change.isPending ? 'Guardando…' : 'Cambiar estado'}
       </button>
     </form>
@@ -454,7 +455,7 @@ function TrackingEditor({ order, onDone, onError }: ActionProps) {
         >
           <TrackingFields value={draft} onChange={setDraft} />
           <div className="flex gap-2">
-            <button type="submit" disabled={save.isPending} className="rounded bg-neutral-800 px-3 py-1.5 text-white disabled:opacity-50">
+            <button type="submit" disabled={save.isPending} className="rounded bg-primary hover:bg-primary-hover px-3 py-1.5 text-on-primary disabled:opacity-50">
               Guardar
             </button>
             <button type="button" onClick={() => setEditing(false)} className="rounded border border-neutral-300 px-3 py-1.5">
@@ -484,7 +485,7 @@ function RefundRow({ refund, onDone }: { refund: AdminRefund; onDone: () => void
   return (
     <div className={refund.needsAttention ? 'rounded border border-red-200 bg-red-50 p-3' : ''}>
       <p className="font-medium text-neutral-800">
-        {REFUND_STATUS_LABELS[refund.status]}: ${refund.amount}
+        {REFUND_STATUS_LABELS[refund.status]}: {formatPrice(refund.amount)}
       </p>
       <p className="text-xs text-neutral-500">
         {REFUND_ORIGIN_LABELS[refund.originCu]} · {formatDateTime(refund.createdAt)}
@@ -498,7 +499,7 @@ function RefundRow({ refund, onDone }: { refund: AdminRefund; onDone: () => void
             type="button"
             onClick={() => retry.mutate()}
             disabled={retry.isPending}
-            className="rounded bg-neutral-800 px-3 py-1 text-white disabled:opacity-50"
+            className="rounded bg-primary hover:bg-primary-hover px-3 py-1 text-on-primary disabled:opacity-50"
           >
             {retry.isPending ? 'Reintentando…' : 'Reintentar'}
           </button>
@@ -518,7 +519,7 @@ function RefundRow({ refund, onDone }: { refund: AdminRefund; onDone: () => void
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Cómo se devolvió el dinero (p. ej. transferencia del día…)"
+            placeholder="Cómo se devolvió el dinero (p. ej. transferencia del día…)" aria-label="Cómo se devolvió el dinero (p. ej. transferencia del día…)"
             maxLength={1000}
             rows={2}
             className="w-full rounded border border-neutral-300 px-2 py-1.5"
@@ -527,7 +528,7 @@ function RefundRow({ refund, onDone }: { refund: AdminRefund; onDone: () => void
             <button
               type="submit"
               disabled={!note.trim() || resolve.isPending}
-              className="rounded bg-neutral-800 px-3 py-1 text-white disabled:opacity-50"
+              className="rounded bg-primary hover:bg-primary-hover px-3 py-1 text-on-primary disabled:opacity-50"
             >
               Confirmar
             </button>
@@ -563,13 +564,13 @@ function NoteForm({ orderId, onDone }: { orderId: string; onDone: (next: Detail)
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Agregar una nota interna…"
+        placeholder="Agregar una nota interna…" aria-label="Agregar una nota interna…"
         maxLength={2000}
         rows={2}
         className="w-full rounded border border-neutral-300 px-2 py-1.5"
       />
       {add.isError && <p className="text-xs text-red-700">{apiErrorMessage(add.error, 'No se pudo guardar la nota.')}</p>}
-      <button type="submit" disabled={!text.trim() || add.isPending} className="rounded bg-neutral-800 px-3 py-1.5 text-white disabled:opacity-50">
+      <button type="submit" disabled={!text.trim() || add.isPending} className="rounded bg-primary hover:bg-primary-hover px-3 py-1.5 text-on-primary disabled:opacity-50">
         Agregar nota
       </button>
     </form>

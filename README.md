@@ -76,12 +76,35 @@ front:
 CI: en cada push y pull request, GitHub Actions (.github/workflows/ci.yml) corre en los dos proyectos build, lint y tests; en el back además el typecheck, las migraciones, el seed y los e2e contra un Postgres propio.
 
 
-TODO:
+# TODO:
 
-- agregar visualización de contraseña en auth
-- realizar cambios estéticos a frontend (charlar todo el equipo)
-- agregar imagen de la marca a la página (header)
-- mensajes genéricos en login (ahora dice contraseña/correo inválido)
-- mostrar vía toast el mensaje de "cuenta bloqueada por 15 minutos" en frontend
-- mostrar cuadro de confirmación para otorgar permisos de administrador
--  
+Desarrollo general:
+    - filtros en pestaña stock de admin
+    - revisar penalización de tiempo por intentos fallidos de inicio de sesión
+    - ejecutable init para linux/windows que ejecute los comandos de iniciacion
+    - optimización codebase teniendo en cuenta SOLID, GRASP y patrones diseño.
+
+UX/UI:
+    - decidir tema con equipo
+
+Seguridad:
+
+    - protección contra ataques bruteforce desde múltiples IPs (clasificar en ip's de confianza, ver "device cookies" de Owasp)
+    - 2fa para perfiles administrador
+    - mail de aviso por inicio de sesión en dispositivo nuevo
+    - integración Have i been pwned (evita contraseñas filtradas)
+    - CAPTCHA(?)
+    - mostrar cuadro de confirmación para otorgar permisos de administrador
+    - perfil superadmin para desarrolladores
+
+# BUGFIXES:
+
+prioridad alta:
+    - 
+
+prioridad media:
+    - producto no se deshabilita al reservar totalmente el stock, solo muestra mensaje al momento de agregar al carrito, mejora UX (severidad media)
+
+prioridad Baja:
+    - bugfix hover catálogo: ubuntu linux firefox (el zoom de la imagen y la sombra de las tarjetas funcionan con la pantalla táctil pero no con el mouse; ver `frontend/src/components/catalog/ProductCard.tsx`) (severidad baja)
+    - el mensaje de bloqueo de cuenta se stackea, limitar a uno (inicio de sesión) (severidad baja)

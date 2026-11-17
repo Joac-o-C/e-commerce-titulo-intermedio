@@ -1,7 +1,9 @@
+import { Link } from 'react-router-dom'
 import { useToastStore } from '../../store/toast.store'
 
 const TONE_CLASSES = {
   info: 'bg-neutral-800 text-white',
+  success: 'bg-neutral-800 text-white',
   warning: 'bg-amber-100 text-amber-900 ring-1 ring-amber-300',
 }
 
@@ -21,7 +23,21 @@ export function Toaster() {
           key={toast.id}
           className={`pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg px-4 py-3 text-sm shadow-lg ${TONE_CLASSES[toast.tone]}`}
         >
+          {toast.tone === 'success' && (
+            <span aria-hidden="true" className="text-green-400">
+              ✓
+            </span>
+          )}
           <p className="flex-1">{toast.message}</p>
+          {toast.action && (
+            <Link
+              to={toast.action.to}
+              onClick={() => dismiss(toast.id)}
+              className="shrink-0 font-medium underline underline-offset-2"
+            >
+              {toast.action.label}
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => dismiss(toast.id)}

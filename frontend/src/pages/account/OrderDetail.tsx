@@ -16,17 +16,18 @@ import {
 } from '../../features/orders/order-labels'
 import { ordersService } from '../../services/orders.service'
 import type { CheckoutProblem, OrderDetail as OrderDetailData } from '../../types/order.types'
+import { formatPrice } from '../../lib/format'
 
 function describeProblem(p: CheckoutProblem): string {
   switch (p.type) {
     case 'unavailable':
       return `${p.productName} ya no está disponible.`
     case 'price_changed':
-      return `${p.productName} cambió de precio ($${p.from} → $${p.to}).`
+      return `${p.productName} cambió de precio (${formatPrice(p.from)} → ${formatPrice(p.to)}).`
     case 'insufficient_stock':
       return `${p.productName} ya no tiene stock suficiente.`
     case 'total_changed':
-      return `El total cambió de $${p.expected} a $${p.actual}.`
+      return `El total cambió de ${formatPrice(p.expected)} a ${formatPrice(p.actual)}.`
   }
 }
 
@@ -150,7 +151,7 @@ export function OrderDetail() {
             type="button"
             onClick={() => retryPayment.mutate()}
             disabled={retryPayment.isPending}
-            className="rounded bg-neutral-800 px-4 py-2 text-sm text-white disabled:opacity-60"
+            className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary disabled:opacity-60"
           >
             {retryPayment.isPending ? 'Redirigiendo a MercadoPago…' : 'Reintentar el pago'}
           </button>
@@ -199,10 +200,10 @@ export function OrderDetail() {
                   {attributes.length > 0 && <span className="text-neutral-500"> ({attributes.join(' / ')})</span>}
                   <span className="text-neutral-500">
                     {' '}
-                    · {item.quantity} × ${item.unitPrice}
+                    · {item.quantity} × {formatPrice(item.unitPrice)}
                   </span>
                 </span>
-                <span>${item.subtotal}</span>
+                <span>{formatPrice(item.subtotal)}</span>
               </li>
             )
           })}
@@ -210,15 +211,15 @@ export function OrderDetail() {
         <dl className="mt-3 space-y-1 border-t border-neutral-200 pt-3">
           <div className="flex justify-between">
             <dt className="text-neutral-600">Subtotal</dt>
-            <dd>${order.subtotal}</dd>
+            <dd>{formatPrice(order.subtotal)}</dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-neutral-600">Envío ({order.shippingMethod.name})</dt>
-            <dd>${order.shippingCost}</dd>
+            <dd>{formatPrice(order.shippingCost)}</dd>
           </div>
           <div className="flex justify-between font-semibold">
             <dt>Total</dt>
-            <dd>${order.total}</dd>
+            <dd>{formatPrice(order.total)}</dd>
           </div>
         </dl>
       </section>
@@ -256,7 +257,7 @@ export function OrderDetail() {
           )}
           {order.refunds.map((refund) => (
             <p key={refund.id} className="mt-1 text-neutral-600">
-              {REFUND_STATUS_LABELS[refund.status]}: ${refund.amount}
+              {REFUND_STATUS_LABELS[refund.status]}: {formatPrice(refund.amount)}
             </p>
           ))}
           {/* CU-13 (flujo 6a). */}
