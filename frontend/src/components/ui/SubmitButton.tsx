@@ -13,7 +13,7 @@ export function SubmitButton({ loading, loadingLabel, children }: SubmitButtonPr
     <button
       type="submit"
       disabled={loading}
-      className="flex w-full items-center justify-center gap-2 rounded bg-neutral-800 py-2 text-white disabled:opacity-70"
+      className="flex w-full items-center justify-center gap-2 rounded bg-primary hover:bg-primary-hover py-2 text-on-primary disabled:opacity-70"
     >
       {loading && <Spinner />}
       {loading ? loadingLabel : children}

@@ -17,7 +17,7 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 }
 
 const input = 'rounded border border-neutral-300 px-2 py-1.5'
-const primary = 'rounded bg-neutral-800 px-3 py-1.5 text-white disabled:opacity-50'
+const primary = 'rounded bg-primary hover:bg-primary-hover px-3 py-1.5 text-on-primary disabled:opacity-50'
 
 /**
  * CU-22 Resolver solicitud de cambio o devolución (admin): revisar la

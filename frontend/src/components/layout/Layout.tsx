@@ -6,9 +6,13 @@ import { STORE_NAME } from '../../lib/brand'
 import { plural } from '../../lib/format'
 import { BrandLogo } from '../brand/BrandLogo'
 import { Toaster } from '../ui/Toaster'
+import { ThemePicker } from '../dev/ThemePicker'
 import { AccountMenu } from './AccountMenu'
 import { AdminBar } from './AdminBar'
 import { CartIcon, BoxIcon, UserIcon } from './icons'
+
+// Selector de tema (Fase 6): sólo con VITE_THEME_SELECTION=true en el .env.
+const SHOW_THEME_PICKER = import.meta.env.VITE_THEME_SELECTION?.trim().toLowerCase() === 'true'
 
 const NAV_LINK = 'flex items-center gap-1.5 rounded p-2 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 sm:px-2.5'
 
@@ -58,7 +62,7 @@ export function Layout() {
                 {cartCount > 0 && (
                   <span
                     aria-hidden="true"
-                    className="absolute -right-2 -top-1.5 min-w-4.5 rounded-full bg-neutral-900 px-1 py-0.5 text-center text-[10px] font-semibold leading-none text-white ring-2 ring-white"
+                    className="absolute -right-2 -top-1.5 min-w-4.5 rounded-full bg-primary px-1 py-0.5 text-center text-[10px] font-semibold leading-none text-on-primary ring-2 ring-white"
                   >
                     {cartCount > 99 ? '99+' : cartCount}
                   </span>
@@ -82,6 +86,7 @@ export function Layout() {
         </div>
       </footer>
       <Toaster />
+      {SHOW_THEME_PICKER && <ThemePicker />}
     </div>
   )
 }

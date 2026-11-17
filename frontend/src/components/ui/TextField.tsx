@@ -1,7 +1,7 @@
 import { useId, type ComponentProps, type ReactNode } from 'react'
 
 export const INPUT_CLASSES =
-  'w-full rounded border border-neutral-300 bg-white px-3 py-2 text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-800 focus:outline-none focus:ring-1 focus:ring-neutral-800 aria-[invalid=true]:border-red-500 aria-[invalid=true]:ring-red-500'
+  'w-full rounded border border-neutral-300 bg-white px-3 py-2 text-neutral-900 placeholder:text-neutral-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary aria-[invalid=true]:border-red-500 aria-[invalid=true]:ring-red-500'
 
 export interface TextFieldProps extends ComponentProps<'input'> {
   label: string

@@ -151,7 +151,7 @@ export function OrderDetail() {
             type="button"
             onClick={() => retryPayment.mutate()}
             disabled={retryPayment.isPending}
-            className="rounded bg-neutral-800 px-4 py-2 text-sm text-white disabled:opacity-60"
+            className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary disabled:opacity-60"
           >
             {retryPayment.isPending ? 'Redirigiendo a MercadoPago…' : 'Reintentar el pago'}
           </button>

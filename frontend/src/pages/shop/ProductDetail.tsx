@@ -132,7 +132,7 @@ export function ProductDetail() {
                   <img
                     src={img.url}
                     alt=""
-                    className={`h-16 w-16 rounded object-cover ${i === selectedImage ? 'ring-2 ring-neutral-800' : ''}`}
+                    className={`h-16 w-16 rounded object-cover ${i === selectedImage ? 'ring-2 ring-primary' : ''}`}
                   />
                 </button>
               ))}
@@ -180,7 +180,7 @@ export function ProductDetail() {
                     }}
                     className={`rounded border px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-40 ${
                       selectedVariant.id === v.id
-                        ? 'border-neutral-800 bg-neutral-800 text-white'
+                        ? 'border-primary bg-primary text-on-primary'
                         : 'border-neutral-300'
                     }`}
                   >
@@ -229,7 +229,7 @@ export function ProductDetail() {
               type="button"
               disabled={selectedVariant.isOutOfStock || !!excessPrompt || adding}
               onClick={handleAddToCart}
-              className="flex w-full items-center justify-center gap-2 rounded bg-neutral-800 py-3 font-medium text-white disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded bg-primary hover:bg-primary-hover py-3 font-medium text-on-primary disabled:opacity-50"
             >
               {adding && <Spinner />}
               {selectedVariant.isOutOfStock ? 'Sin stock' : adding ? 'Agregando…' : 'Agregar al carrito'}

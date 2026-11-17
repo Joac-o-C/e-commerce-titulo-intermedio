@@ -400,7 +400,7 @@ function StatusChanger({ order, onDone, onError }: ActionProps) {
           </p>
         </div>
       )}
-      <button type="submit" disabled={!to || change.isPending} className="rounded bg-neutral-800 px-3 py-1.5 text-white disabled:opacity-50">
+      <button type="submit" disabled={!to || change.isPending} className="rounded bg-primary hover:bg-primary-hover px-3 py-1.5 text-on-primary disabled:opacity-50">
         {change.isPending ? 'Guardando…' : 'Cambiar estado'}
       </button>
     </form>
@@ -455,7 +455,7 @@ function TrackingEditor({ order, onDone, onError }: ActionProps) {
         >
           <TrackingFields value={draft} onChange={setDraft} />
           <div className="flex gap-2">
-            <button type="submit" disabled={save.isPending} className="rounded bg-neutral-800 px-3 py-1.5 text-white disabled:opacity-50">
+            <button type="submit" disabled={save.isPending} className="rounded bg-primary hover:bg-primary-hover px-3 py-1.5 text-on-primary disabled:opacity-50">
               Guardar
             </button>
             <button type="button" onClick={() => setEditing(false)} className="rounded border border-neutral-300 px-3 py-1.5">
@@ -499,7 +499,7 @@ function RefundRow({ refund, onDone }: { refund: AdminRefund; onDone: () => void
             type="button"
             onClick={() => retry.mutate()}
             disabled={retry.isPending}
-            className="rounded bg-neutral-800 px-3 py-1 text-white disabled:opacity-50"
+            className="rounded bg-primary hover:bg-primary-hover px-3 py-1 text-on-primary disabled:opacity-50"
           >
             {retry.isPending ? 'Reintentando…' : 'Reintentar'}
           </button>
@@ -528,7 +528,7 @@ function RefundRow({ refund, onDone }: { refund: AdminRefund; onDone: () => void
             <button
               type="submit"
               disabled={!note.trim() || resolve.isPending}
-              className="rounded bg-neutral-800 px-3 py-1 text-white disabled:opacity-50"
+              className="rounded bg-primary hover:bg-primary-hover px-3 py-1 text-on-primary disabled:opacity-50"
             >
               Confirmar
             </button>
@@ -570,7 +570,7 @@ function NoteForm({ orderId, onDone }: { orderId: string; onDone: (next: Detail)
         className="w-full rounded border border-neutral-300 px-2 py-1.5"
       />
       {add.isError && <p className="text-xs text-red-700">{apiErrorMessage(add.error, 'No se pudo guardar la nota.')}</p>}
-      <button type="submit" disabled={!text.trim() || add.isPending} className="rounded bg-neutral-800 px-3 py-1.5 text-white disabled:opacity-50">
+      <button type="submit" disabled={!text.trim() || add.isPending} className="rounded bg-primary hover:bg-primary-hover px-3 py-1.5 text-on-primary disabled:opacity-50">
         Agregar nota
       </button>
     </form>

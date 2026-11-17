@@ -97,7 +97,7 @@ export function AddressForm({ title = 'Agregar dirección', isPending, error, on
         <button
           type="submit"
           disabled={isPending}
-          className="rounded bg-neutral-800 px-4 py-2 text-white disabled:opacity-50"
+          className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-on-primary disabled:opacity-50"
         >
           Guardar dirección
         </button>

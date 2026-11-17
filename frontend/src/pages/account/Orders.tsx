@@ -204,7 +204,7 @@ function OrderFilters({ initial, onApply }: { initial: FilterValues; onApply: (p
         />
       </label>
       <div className="flex items-end gap-2">
-        <button type="submit" className="rounded bg-neutral-800 px-3 py-1.5 text-white">
+        <button type="submit" className="rounded bg-primary hover:bg-primary-hover px-3 py-1.5 text-on-primary">
           Buscar
         </button>
         {hasFilters && (

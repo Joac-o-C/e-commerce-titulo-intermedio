@@ -95,6 +95,7 @@ Seguridad:
     - integración Have i been pwned (evita contraseñas filtradas)
     - CAPTCHA(?)
     - mostrar cuadro de confirmación para otorgar permisos de administrador
+    - perfil superadmin para desarrolladores
 
 # BUGFIXES:
 

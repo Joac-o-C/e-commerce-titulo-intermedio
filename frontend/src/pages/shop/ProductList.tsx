@@ -18,7 +18,7 @@ const SORT_OPTIONS: { value: ProductSort; label: string }[] = [
 ]
 
 const FIELD_CLASSES =
-  'w-full rounded border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-800 focus:outline-none focus:ring-1 focus:ring-neutral-800'
+  'w-full rounded border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary'
 
 type FilterPatch = Record<string, string | string[] | undefined>
 
@@ -192,7 +192,7 @@ export function ProductList() {
             <FilterIcon />
             Filtrar
             {panelFilterCount > 0 && (
-              <span className="rounded-full bg-neutral-800 px-1.5 text-xs leading-5 text-white">{panelFilterCount}</span>
+              <span className="rounded-full bg-primary px-1.5 text-xs leading-5 text-on-primary">{panelFilterCount}</span>
             )}
           </button>
           <div className="flex-1">{sortSelect}</div>
@@ -366,7 +366,7 @@ function FiltersPanel({ categories, filters, onToggleCategory, onUpdate }: Filte
           type="checkbox"
           checked={filters.inStockOnly ?? false}
           onChange={(e) => onUpdate({ inStockOnly: e.target.checked ? 'true' : undefined })}
-          className="h-4 w-4 accent-neutral-800"
+          className="h-4 w-4 accent-primary"
         />
         Solo con stock
       </label>
@@ -377,7 +377,7 @@ function FiltersPanel({ categories, filters, onToggleCategory, onUpdate }: Filte
 function CategoryCheckbox({ category, checked, onChange }: { category: CategoryNode; checked: boolean; onChange: () => void }) {
   return (
     <label className="flex cursor-pointer items-center gap-2 hover:text-neutral-900">
-      <input type="checkbox" checked={checked} onChange={onChange} className="h-4 w-4 accent-neutral-800" />
+      <input type="checkbox" checked={checked} onChange={onChange} className="h-4 w-4 accent-primary" />
       {category.name}
     </label>
   )
@@ -441,7 +441,7 @@ function FiltersDrawer({
         </div>
         <div className="flex-1 space-y-6 overflow-y-auto px-4 py-5">{children}</div>
         <div className="border-t border-neutral-200 p-4">
-          <button type="button" onClick={onClose} className="w-full rounded bg-neutral-800 py-2.5 font-medium text-white">
+          <button type="button" onClick={onClose} className="w-full rounded bg-primary hover:bg-primary-hover py-2.5 font-medium text-on-primary">
             Ver {resultsLabel}
           </button>
         </div>

@@ -14,7 +14,7 @@ export function ProgressBar({ active, className = '' }: ProgressBarProps) {
       aria-hidden={!active}
       className={`h-1 w-full overflow-hidden ${className}`}
     >
-      {active && <div className="h-full w-2/5 animate-indeterminate bg-neutral-800 motion-reduce:animate-pulse" />}
+      {active && <div className="h-full w-2/5 animate-indeterminate bg-primary motion-reduce:animate-pulse" />}
     </div>
   )
 }

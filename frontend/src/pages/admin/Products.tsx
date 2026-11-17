@@ -247,7 +247,7 @@ export function AdminProducts() {
         <h1 className="text-2xl font-semibold text-neutral-800">Productos</h1>
         <button
           type="button"
-          className="rounded bg-neutral-800 px-4 py-2 text-sm text-white"
+          className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary"
           onClick={() => {
             resetForm()
             setShowForm(true)
@@ -474,7 +474,7 @@ export function AdminProducts() {
             <button
               type="submit"
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="rounded bg-neutral-800 px-4 py-2 text-sm text-white disabled:opacity-50"
+              className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary disabled:opacity-50"
             >
               {editing ? 'Guardar cambios' : 'Crear producto'}
             </button>

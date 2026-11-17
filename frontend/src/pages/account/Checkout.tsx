@@ -323,7 +323,7 @@ export function Checkout() {
           type="button"
           onClick={onConfirm}
           disabled={!quote.data || !adjustmentsAcknowledged || confirm.isPending || confirm.isSuccess}
-          className="w-full rounded bg-neutral-800 py-2 text-white disabled:opacity-50"
+          className="w-full rounded bg-primary hover:bg-primary-hover py-2 text-on-primary disabled:opacity-50"
         >
           {confirm.isPending || confirm.isSuccess ? 'Redirigiendo a MercadoPago…' : 'Confirmar y pagar'}
         </button>

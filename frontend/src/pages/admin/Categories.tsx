@@ -174,7 +174,7 @@ export function AdminCategories() {
           <button
             type="submit"
             disabled={createMutation.isPending || updateMutation.isPending}
-            className="rounded bg-neutral-800 px-4 py-2 text-sm text-white disabled:opacity-50"
+            className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary disabled:opacity-50"
           >
             {editingId ? 'Guardar cambios' : 'Crear categoría'}
           </button>

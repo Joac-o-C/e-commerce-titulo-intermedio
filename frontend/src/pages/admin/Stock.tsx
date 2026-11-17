@@ -210,7 +210,7 @@ export function AdminStock() {
               <button
                 type="submit"
                 disabled={adjustMutation.isPending}
-                className="rounded bg-neutral-800 px-4 py-2 text-sm text-white disabled:opacity-50"
+                className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary disabled:opacity-50"
               >
                 Aplicar
               </button>
@@ -276,7 +276,7 @@ export function AdminStock() {
               </button>
               <button
                 type="submit"
-                className="rounded bg-neutral-800 px-4 py-2 text-sm text-white"
+                className="rounded bg-primary hover:bg-primary-hover px-4 py-2 text-sm text-on-primary"
               >
                 Guardar
               </button>

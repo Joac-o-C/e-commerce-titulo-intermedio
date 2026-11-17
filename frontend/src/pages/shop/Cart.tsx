@@ -58,7 +58,7 @@ export function Cart() {
         summary={
           <CartSummary totalItems={cart?.totalItems ?? 0} totalAmount={cart?.totalAmount ?? '0'} onClear={() => setConfirmClear(true)}>
             {/* CU-03 (paso 1). */}
-            <Link to="/checkout" className="block w-full rounded bg-neutral-800 py-3 text-center font-medium text-white hover:bg-neutral-700">
+            <Link to="/checkout" className="block w-full rounded bg-primary py-3 text-center font-medium text-on-primary hover:bg-primary-hover">
               Finalizar compra
             </Link>
           </CartSummary>
@@ -102,7 +102,7 @@ export function Cart() {
           <Link
             to="/login"
             state={{ from: '/checkout' }}
-            className="block w-full rounded bg-neutral-800 py-3 text-center font-medium text-white hover:bg-neutral-700"
+            className="block w-full rounded bg-primary py-3 text-center font-medium text-on-primary hover:bg-primary-hover"
           >
             Iniciá sesión para comprar
           </Link>
@@ -264,7 +264,7 @@ function EmptyCart() {
       </div>
       <h1 className="mt-4 text-xl font-semibold text-neutral-800">Tu carrito está vacío</h1>
       <p className="mt-1 text-sm text-neutral-500">Cuando agregues productos, los vas a ver acá.</p>
-      <Link to="/" className="mt-6 inline-block rounded bg-neutral-800 px-6 py-2.5 font-medium text-white hover:bg-neutral-700">
+      <Link to="/" className="mt-6 inline-block rounded bg-primary px-6 py-2.5 font-medium text-on-primary hover:bg-primary-hover">
         Ir al catálogo
       </Link>
     </main>

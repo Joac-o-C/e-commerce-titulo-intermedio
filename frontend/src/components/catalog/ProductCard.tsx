@@ -11,7 +11,7 @@ export function ProductCard({ product }: { product: ProductCardData }) {
   return (
     <Link
       to={`/products/${product.id}`}
-      className="group flex flex-col rounded-lg border border-neutral-200 bg-white p-3 transition-shadow [&:hover]:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-800"
+      className="group flex flex-col rounded-lg border border-neutral-200 bg-white p-3 transition-shadow [&:hover]:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
     >
       <div className="relative aspect-square overflow-hidden rounded bg-neutral-100">
         {product.mainImageUrl && (
