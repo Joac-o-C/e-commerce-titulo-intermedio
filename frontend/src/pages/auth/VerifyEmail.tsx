@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { authService } from '../../services/auth.service'
 import { ProgressBar } from '../../components/ui/ProgressBar'
 import { SubmitButton } from '../../components/ui/SubmitButton'
+import { TextField } from '../../components/ui/TextField'
 
 type Status = 'verifying' | 'success' | 'error'
 
@@ -62,13 +63,14 @@ export function VerifyEmail() {
               </p>
               <form onSubmit={handleResend}>
                 <fieldset disabled={isResending} className="space-y-3 text-left">
-                  <input
+                  <TextField
+                    label="Email"
                     type="email"
                     required
+                    autoComplete="email"
+                    placeholder="nombre@correo.com"
                     value={resendEmail}
                     onChange={(e) => setResendEmail(e.target.value)}
-                    placeholder="Email"
-                    className="w-full rounded border border-neutral-300 px-3 py-2"
                   />
                   <SubmitButton loading={isResending} loadingLabel="Reenviando…">
                     Reenviar verificación

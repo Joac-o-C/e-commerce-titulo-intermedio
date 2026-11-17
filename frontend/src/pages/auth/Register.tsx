@@ -6,6 +6,8 @@ import { z } from 'zod'
 import { authService } from '../../services/auth.service'
 import { ProgressBar } from '../../components/ui/ProgressBar'
 import { SubmitButton } from '../../components/ui/SubmitButton'
+import { TextField } from '../../components/ui/TextField'
+import { PasswordField } from '../../components/ui/PasswordField'
 import { PASSWORD_POLICY_MESSAGE, PASSWORD_POLICY_REGEX } from './password-policy'
 
 const schema = z
@@ -65,61 +67,50 @@ export function Register() {
       <form
         onSubmit={handleSubmit(onSubmit)}
         aria-busy={isSubmitting}
-        className="w-full max-w-sm overflow-hidden rounded-lg bg-white shadow"
+        className="w-full max-w-md overflow-hidden rounded-lg bg-white shadow"
       >
         <ProgressBar active={isSubmitting} />
         <fieldset disabled={isSubmitting} className="space-y-4 p-6">
           <h1 className="text-xl font-semibold text-neutral-800">Crear cuenta</h1>
 
-          <div>
-            <input
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <TextField
               {...register('firstName')}
-              placeholder="Nombre"
-              className="w-full rounded border border-neutral-300 px-3 py-2"
+              label="Nombre"
+              autoComplete="given-name"
+              error={errors.firstName?.message}
             />
-            {errors.firstName && <p className="text-sm text-red-600">{errors.firstName.message}</p>}
-          </div>
-
-          <div>
-            <input
+            <TextField
               {...register('lastName')}
-              placeholder="Apellido"
-              className="w-full rounded border border-neutral-300 px-3 py-2"
+              label="Apellido"
+              autoComplete="family-name"
+              error={errors.lastName?.message}
             />
-            {errors.lastName && <p className="text-sm text-red-600">{errors.lastName.message}</p>}
           </div>
 
-          <div>
-            <input
-              {...register('email')}
-              type="email"
-              placeholder="Email"
-              className="w-full rounded border border-neutral-300 px-3 py-2"
-            />
-            {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
-          </div>
+          <TextField
+            {...register('email')}
+            label="Email"
+            type="email"
+            autoComplete="email"
+            placeholder="nombre@correo.com"
+            error={errors.email?.message}
+          />
 
-          <div>
-            <input
-              {...register('password')}
-              type="password"
-              placeholder="Contraseña"
-              className="w-full rounded border border-neutral-300 px-3 py-2"
-            />
-            {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
-          </div>
+          <PasswordField
+            {...register('password')}
+            label="Contraseña"
+            autoComplete="new-password"
+            hint="Mínimo 8 caracteres, con una mayúscula y un número."
+            error={errors.password?.message}
+          />
 
-          <div>
-            <input
-              {...register('passwordConfirmation')}
-              type="password"
-              placeholder="Confirmar contraseña"
-              className="w-full rounded border border-neutral-300 px-3 py-2"
-            />
-            {errors.passwordConfirmation && (
-              <p className="text-sm text-red-600">{errors.passwordConfirmation.message}</p>
-            )}
-          </div>
+          <PasswordField
+            {...register('passwordConfirmation')}
+            label="Repetir contraseña"
+            autoComplete="new-password"
+            error={errors.passwordConfirmation?.message}
+          />
 
           <div className="flex items-center gap-2">
             <input {...register('acceptTerms')} type="checkbox" id="acceptTerms" />

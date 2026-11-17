@@ -211,7 +211,7 @@ function ApproveOrReject({ request, onDone }: ActionProps) {
           <textarea
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="Motivo del rechazo (lo ve el Cliente)"
+            placeholder="Motivo del rechazo (lo ve el Cliente)" aria-label="Motivo del rechazo (lo ve el Cliente)"
             maxLength={1000}
             rows={3}
             className={`w-full ${input}`}
@@ -458,8 +458,8 @@ function DispatchReplacement({ request, onDone }: ActionProps) {
       }}
       className="mt-3 flex flex-wrap items-end gap-2 border-t border-neutral-100 pt-3"
     >
-      <input value={carrier} onChange={(e) => setCarrier(e.target.value)} placeholder="Transportista (opcional)" maxLength={100} className={input} />
-      <input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="Seguimiento (opcional)" maxLength={100} className={input} />
+      <input value={carrier} onChange={(e) => setCarrier(e.target.value)} placeholder="Transportista (opcional)" aria-label="Transportista (opcional)" maxLength={100} className={input} />
+      <input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="Seguimiento (opcional)" aria-label="Seguimiento (opcional)" maxLength={100} className={input} />
       <button type="submit" disabled={dispatch.isPending} className={primary}>
         Marcar despachada
       </button>

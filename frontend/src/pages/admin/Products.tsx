@@ -260,7 +260,7 @@ export function AdminProducts() {
       <input
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Buscar por nombre o marca…"
+        placeholder="Buscar por nombre o marca…" aria-label="Buscar por nombre o marca…"
         className="mt-4 w-full max-w-sm rounded border border-neutral-300 px-3 py-2"
       />
 
@@ -274,14 +274,14 @@ export function AdminProducts() {
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Nombre"
+              placeholder="Nombre" aria-label="Nombre"
               className="rounded border border-neutral-300 px-3 py-2"
               required
             />
             <input
               value={form.brand}
               onChange={(e) => setForm({ ...form, brand: e.target.value })}
-              placeholder="Marca (opcional)"
+              placeholder="Marca (opcional)" aria-label="Marca (opcional)"
               className="rounded border border-neutral-300 px-3 py-2"
             />
             <input
@@ -289,7 +289,7 @@ export function AdminProducts() {
               step="0.01"
               value={form.price}
               onChange={(e) => setForm({ ...form, price: e.target.value })}
-              placeholder="Precio"
+              placeholder="Precio" aria-label="Precio"
               className="rounded border border-neutral-300 px-3 py-2"
               required
             />
@@ -297,7 +297,7 @@ export function AdminProducts() {
               type="number"
               value={form.lowStockThreshold}
               onChange={(e) => setForm({ ...form, lowStockThreshold: e.target.value })}
-              placeholder="Umbral de stock bajo (opcional, default 5)"
+              placeholder="Umbral de stock bajo (opcional, default 5)" aria-label="Umbral de stock bajo (opcional, default 5)"
               className="rounded border border-neutral-300 px-3 py-2"
             />
           </div>
@@ -305,7 +305,7 @@ export function AdminProducts() {
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Descripción"
+            placeholder="Descripción" aria-label="Descripción"
             className="w-full rounded border border-neutral-300 px-3 py-2"
             required
           />

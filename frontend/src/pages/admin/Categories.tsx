@@ -124,14 +124,14 @@ export function AdminCategories() {
         <input
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="Nombre"
+          placeholder="Nombre" aria-label="Nombre"
           className="w-full rounded border border-neutral-300 px-3 py-2"
           required
         />
         <input
           value={form.description ?? ''}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
-          placeholder="Descripción (opcional)"
+          placeholder="Descripción (opcional)" aria-label="Descripción (opcional)"
           className="w-full rounded border border-neutral-300 px-3 py-2"
         />
         <select

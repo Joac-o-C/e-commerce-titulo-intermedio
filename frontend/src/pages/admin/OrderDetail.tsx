@@ -58,14 +58,14 @@ function TrackingFields({ value, onChange }: { value: TrackingDraft; onChange: (
       <input
         value={value.carrier}
         onChange={(e) => onChange({ ...value, carrier: e.target.value })}
-        placeholder="Transportista (opcional)"
+        placeholder="Transportista (opcional)" aria-label="Transportista (opcional)"
         maxLength={100}
         className={field}
       />
       <input
         value={value.number}
         onChange={(e) => onChange({ ...value, number: e.target.value })}
-        placeholder="Número de seguimiento (opcional)"
+        placeholder="Número de seguimiento (opcional)" aria-label="Número de seguimiento (opcional)"
         maxLength={100}
         className={field}
       />
@@ -519,7 +519,7 @@ function RefundRow({ refund, onDone }: { refund: AdminRefund; onDone: () => void
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Cómo se devolvió el dinero (p. ej. transferencia del día…)"
+            placeholder="Cómo se devolvió el dinero (p. ej. transferencia del día…)" aria-label="Cómo se devolvió el dinero (p. ej. transferencia del día…)"
             maxLength={1000}
             rows={2}
             className="w-full rounded border border-neutral-300 px-2 py-1.5"
@@ -564,7 +564,7 @@ function NoteForm({ orderId, onDone }: { orderId: string; onDone: (next: Detail)
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Agregar una nota interna…"
+        placeholder="Agregar una nota interna…" aria-label="Agregar una nota interna…"
         maxLength={2000}
         rows={2}
         className="w-full rounded border border-neutral-300 px-2 py-1.5"

@@ -9,6 +9,8 @@ import { useCartMerge } from '../../features/cart/hooks/useCartMerge'
 import { MergeCartModal } from '../../features/cart/components/MergeCartModal'
 import { ProgressBar } from '../../components/ui/ProgressBar'
 import { SubmitButton } from '../../components/ui/SubmitButton'
+import { TextField } from '../../components/ui/TextField'
+import { PasswordField } from '../../components/ui/PasswordField'
 
 const schema = z.object({
   email: z.string().email('Email inválido'),
@@ -75,25 +77,21 @@ export function Login() {
         <fieldset disabled={isSubmitting} className="space-y-4 p-6">
           <h1 className="text-xl font-semibold text-neutral-800">Iniciar sesión</h1>
 
-          <div>
-            <input
-              {...register('email')}
-              type="email"
-              placeholder="Email"
-              className="w-full rounded border border-neutral-300 px-3 py-2"
-            />
-            {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
-          </div>
+          <TextField
+            {...register('email')}
+            label="Email"
+            type="email"
+            autoComplete="email"
+            placeholder="nombre@correo.com"
+            error={errors.email?.message}
+          />
 
-          <div>
-            <input
-              {...register('password')}
-              type="password"
-              placeholder="Contraseña"
-              className="w-full rounded border border-neutral-300 px-3 py-2"
-            />
-            {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
-          </div>
+          <PasswordField
+            {...register('password')}
+            label="Contraseña"
+            autoComplete="current-password"
+            error={errors.password?.message}
+          />
 
           {serverError && <p className="text-sm text-red-600">{serverError}</p>}
 

@@ -191,14 +191,14 @@ export function AdminStock() {
               min={0}
               value={adjustForm.quantity}
               onChange={(e) => setAdjustForm({ ...adjustForm, quantity: Number(e.target.value) })}
-              placeholder="Cantidad"
+              placeholder="Cantidad" aria-label="Cantidad"
               className="w-full rounded border border-neutral-300 px-3 py-2"
               required
             />
             <input
               value={adjustForm.reason}
               onChange={(e) => setAdjustForm({ ...adjustForm, reason: e.target.value })}
-              placeholder="Motivo"
+              placeholder="Motivo" aria-label="Motivo"
               className="w-full rounded border border-neutral-300 px-3 py-2"
               required
             />
@@ -267,7 +267,7 @@ export function AdminStock() {
               min={0}
               value={thresholdValue}
               onChange={(e) => setThresholdValue(e.target.value)}
-              placeholder="Dejar vacío para usar el default (5)"
+              placeholder="Dejar vacío para usar el default (5)" aria-label="Umbral de stock bajo (vacío = 5)"
               className="w-full rounded border border-neutral-300 px-3 py-2"
             />
             <div className="flex justify-end gap-3">
