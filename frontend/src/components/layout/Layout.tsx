@@ -41,10 +41,17 @@ export function Layout() {
                 Iniciar sesión
               </Link>
             )}
-            <Link to="/cart" className="relative text-neutral-600 hover:text-neutral-900">
+            <Link
+              to="/cart"
+              aria-label={cartCount > 0 ? `Carrito, ${cartCount} ${cartCount === 1 ? 'producto' : 'productos'}` : 'Carrito'}
+              className="flex items-center gap-1.5 text-neutral-600 hover:text-neutral-900"
+            >
               Carrito
               {cartCount > 0 && (
-                <span className="absolute -right-3 -top-2 rounded-full bg-neutral-800 px-1.5 py-0.5 text-xs text-white">
+                <span
+                  aria-hidden="true"
+                  className="min-w-5 rounded-full bg-neutral-800 px-1.5 py-0.5 text-center text-xs font-medium leading-none text-white"
+                >
                   {cartCount}
                 </span>
               )}

@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { fakePaymentService } from '../../services/fake-payment.service'
+import { formatPrice } from '../../lib/format'
 
 type Outcome = 'approved' | 'rejected' | 'pending'
 
@@ -59,13 +60,13 @@ export function SimulatedPayment() {
                   <span>
                     {item.title} × {item.quantity}
                   </span>
-                  <span>${(item.unitPrice * item.quantity).toFixed(2)}</span>
+                  <span>{formatPrice(item.unitPrice * item.quantity)}</span>
                 </li>
               ))}
             </ul>
             <p className="mt-3 flex justify-between border-t border-neutral-200 pt-3 font-semibold">
               <span>Total a pagar</span>
-              <span>${preference.data.amount}</span>
+              <span>{formatPrice(preference.data.amount)}</span>
             </p>
 
             <div className="mt-6 space-y-2">

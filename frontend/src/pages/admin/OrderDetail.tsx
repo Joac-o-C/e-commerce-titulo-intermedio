@@ -19,6 +19,7 @@ import {
 import { adminOrdersService } from '../../services/admin-orders.service'
 import type { AdminOrderDetail as Detail, AdminRefund, TrackingInput } from '../../types/admin-orders.types'
 import type { OrderStatus } from '../../types/order.types'
+import { formatPrice } from '../../lib/format'
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -197,8 +198,8 @@ export function AdminOrderDetail() {
                     )}
                   </td>
                   <td className="whitespace-nowrap py-1.5 pl-4 text-right">{item.quantity}</td>
-                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">${item.unitPrice}</td>
-                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">${item.subtotal}</td>
+                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">{formatPrice(item.unitPrice)}</td>
+                  <td className="whitespace-nowrap py-1.5 pl-4 text-right">{formatPrice(item.subtotal)}</td>
                 </tr>
               ))}
             </tbody>
@@ -207,7 +208,7 @@ export function AdminOrderDetail() {
         <dl className="mt-3 space-y-1 border-t border-neutral-100 pt-3 text-right">
           <div>
             <dt className="inline text-neutral-500">Subtotal: </dt>
-            <dd className="inline">${order.subtotal}</dd>
+            <dd className="inline">{formatPrice(order.subtotal)}</dd>
           </div>
           <div>
             <dt className="inline text-neutral-500">Envío: </dt>
@@ -215,7 +216,7 @@ export function AdminOrderDetail() {
           </div>
           <div className="font-semibold">
             <dt className="inline">Total: </dt>
-            <dd className="inline">${order.total}</dd>
+            <dd className="inline">{formatPrice(order.total)}</dd>
           </div>
         </dl>
       </Card>
@@ -241,7 +242,7 @@ export function AdminOrderDetail() {
             <ul className="mt-2 space-y-1 text-neutral-600">
               {order.payments.map((p) => (
                 <li key={p.id}>
-                  Pago {p.externalPaymentId}: {p.status} · ${p.amount}
+                  Pago {p.externalPaymentId}: {p.status} · {formatPrice(p.amount)}
                   {p.method ? ` · ${p.method}` : ''}
                   {p.installments && p.installments > 1 ? ` en ${p.installments} cuotas` : ''}
                 </li>
@@ -484,7 +485,7 @@ function RefundRow({ refund, onDone }: { refund: AdminRefund; onDone: () => void
   return (
     <div className={refund.needsAttention ? 'rounded border border-red-200 bg-red-50 p-3' : ''}>
       <p className="font-medium text-neutral-800">
-        {REFUND_STATUS_LABELS[refund.status]}: ${refund.amount}
+        {REFUND_STATUS_LABELS[refund.status]}: {formatPrice(refund.amount)}
       </p>
       <p className="text-xs text-neutral-500">
         {REFUND_ORIGIN_LABELS[refund.originCu]} · {formatDateTime(refund.createdAt)}

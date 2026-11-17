@@ -7,6 +7,7 @@ import { useGuestCart } from '../../features/cart/hooks/useGuestCart'
 import { useGuestCartView } from '../../features/cart/hooks/useGuestCartView'
 import { useAuthStore } from '../../store/auth.store'
 import type { InsufficientStockError } from '../../types/cart.types'
+import { formatPrice, plural } from '../../lib/format'
 
 interface ExcessPrompt {
   key: string
@@ -118,7 +119,7 @@ export function Cart() {
                     className="w-20 rounded border border-neutral-300 px-2 py-1"
                   />
                 </div>
-                <p className="font-medium text-neutral-800">${item.subtotal}</p>
+                <p className="font-medium text-neutral-800">{formatPrice(item.subtotal)}</p>
               </div>
 
               {excessPrompt?.key === item.id && (
@@ -152,8 +153,8 @@ export function Cart() {
             Vaciar carrito
           </button>
           <div className="text-right">
-            <p className="text-sm text-neutral-500">{cart?.totalItems} ítem(s)</p>
-            <p className="text-lg font-semibold text-neutral-800">${cart?.totalAmount}</p>
+            <p className="text-sm text-neutral-500">{plural(cart?.totalItems ?? 0, 'producto', 'productos')}</p>
+            <p className="text-lg font-semibold text-neutral-800">{formatPrice(cart?.totalAmount)}</p>
           </div>
         </div>
 
@@ -239,7 +240,7 @@ export function Cart() {
                   className="w-20 rounded border border-neutral-300 px-2 py-1"
                 />
               </div>
-              <p className="font-medium text-neutral-800">${item.subtotal}</p>
+              <p className="font-medium text-neutral-800">{formatPrice(item.subtotal)}</p>
             </div>
 
             {excessPrompt?.key === item.variantId && (
@@ -270,8 +271,8 @@ export function Cart() {
           Vaciar carrito
         </button>
         <div className="text-right">
-          <p className="text-sm text-neutral-500">{guestView.totalItems} ítem(s)</p>
-          <p className="text-lg font-semibold text-neutral-800">${guestView.totalAmount}</p>
+          <p className="text-sm text-neutral-500">{plural(guestView.totalItems, 'producto', 'productos')}</p>
+          <p className="text-lg font-semibold text-neutral-800">{formatPrice(guestView.totalAmount)}</p>
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useFakeGatewayStatus } from '../../features/admin/useAdminSummary'
 import { apiErrorMessage } from '../../features/orders/order-labels'
 import { fakePaymentService } from '../../services/fake-payment.service'
+import { formatPrice } from '../../lib/format'
 
 type Outcome = 'approved' | 'rejected'
 
@@ -110,7 +111,7 @@ export function AdminFakeGateway() {
                 {data.payments.map((p) => (
                   <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-2">
                     <span>
-                      Pago {p.id} · ${p.amount} · <OrderLink order={p.order} />
+                      Pago {p.id} · {formatPrice(p.amount)} · <OrderLink order={p.order} />
                     </span>
                     {buttons((outcome) => settlePayment.mutate({ id: p.id, outcome }))}
                   </li>
@@ -128,7 +129,7 @@ export function AdminFakeGateway() {
                 {data.refunds.map((r) => (
                   <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-2">
                     <span>
-                      Reembolso ${r.amount} del pago {r.paymentId} · <OrderLink order={r.order} />
+                      Reembolso {formatPrice(r.amount)} del pago {r.paymentId} · <OrderLink order={r.order} />
                     </span>
                     {buttons((outcome) => settleRefund.mutate({ id: r.id, outcome }))}
                   </li>

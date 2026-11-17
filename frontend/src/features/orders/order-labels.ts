@@ -1,4 +1,5 @@
 import type { CustomerPaymentStatus, OrderStatus, RefundStatus, ReturnRequestStatus } from '../../types/order.types'
+import { formatPrice } from '../../lib/format'
 
 /** Los 9 estados del pedido, con el texto de las fichas de CU. */
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -48,7 +49,7 @@ export const RETURN_STATUS_LABELS: Record<ReturnRequestStatus, string> = {
 
 /** Costo de envío: 0 se muestra como «Gratis» (decisión de la Fase 6, p. ej. retiro en local). */
 export function formatShippingCost(cost: string): string {
-  return Number(cost) === 0 ? 'Gratis' : `$${cost}`
+  return Number(cost) === 0 ? 'Gratis' : formatPrice(cost)
 }
 
 /** Tope de la columna `order_number` (int4). */

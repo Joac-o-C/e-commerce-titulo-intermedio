@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { OrderDetail } from '../../../types/order.types'
 import { formatDateTime } from '../order-labels'
+import { formatPrice } from '../../../lib/format'
 
 interface CancelOrderDialogProps {
   order: OrderDetail
@@ -26,7 +27,7 @@ export function CancelOrderDialog({ order, pending, onConfirm, onClose }: Cancel
           <li>Liberamos los productos que teníamos reservados para vos.</li>
           {paid ? (
             <li>
-              Te devolvemos ${order.total} al mismo medio de pago. El reembolso puede demorar unos días en verse reflejado.
+              Te devolvemos {formatPrice(order.total)} al mismo medio de pago. El reembolso puede demorar unos días en verse reflejado.
             </li>
           ) : (
             <li>No se te cobra nada: el pedido todavía no tenía un pago acreditado.</li>

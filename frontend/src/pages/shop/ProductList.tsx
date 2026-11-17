@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useProducts } from '../../features/catalog/hooks/useProducts'
 import { useCategories } from '../../features/catalog/hooks/useCategories'
 import type { ProductListFilters, ProductSort } from '../../types/product.types'
+import { formatPrice, plural } from '../../lib/format'
 
 const SORT_OPTIONS: { value: ProductSort; label: string }[] = [
   { value: 'relevancia', label: 'Relevancia' },
@@ -221,7 +222,7 @@ export function ProductList() {
             </div>
           ) : (
             <>
-              <p className="mb-4 text-sm text-neutral-500">{total} resultado(s)</p>
+              <p className="mb-4 text-sm text-neutral-500">{plural(total, 'resultado', 'resultados')}</p>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {items.map((p) => (
                   <Link
@@ -235,7 +236,7 @@ export function ProductList() {
                       )}
                     </div>
                     <p className="mt-2 truncate text-sm font-medium text-neutral-800">{p.name}</p>
-                    <p className="text-sm text-neutral-600">${p.price}</p>
+                    <p className="text-sm text-neutral-600">{formatPrice(p.price)}</p>
                     {p.isOutOfStock && <p className="text-xs text-red-600">Sin stock</p>}
                   </Link>
                 ))}

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { adminStockService } from '../../services/admin-stock.service'
 import { Table } from '../../components/ui/Table'
+import { formatDateTime } from '../../features/orders/order-labels'
 import type { AdjustStockInput, ManualStockMovementType, StockItem, StockMovementType } from '../../types/stock.types'
 
 function extractErrorMessage(err: unknown, fallback: string): string {
@@ -230,7 +231,7 @@ export function AdminStock() {
                     {m.resultingStockTotal}
                   </p>
                   <p className="text-neutral-500">
-                    {new Date(m.createdAt).toLocaleString()} ·{' '}
+                    {formatDateTime(m.createdAt)} ·{' '}
                     {m.actor ? `${m.actor.firstName} ${m.actor.lastName}` : 'Sistema'}
                   </p>
                   {m.reason && <p className="text-neutral-600">{m.reason}</p>}

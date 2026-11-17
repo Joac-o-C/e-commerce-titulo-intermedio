@@ -5,6 +5,7 @@ import { formatAttributes, RETURN_CONDITION_LABELS } from '../../features/admin/
 import { RETURN_STATUS_LABELS, apiErrorMessage, formatDate, formatDateTime } from '../../features/orders/order-labels'
 import { adminReturnsService } from '../../services/admin-returns.service'
 import type { AdminReturnDetail as Detail, ReturnItemCondition } from '../../types/admin-orders.types'
+import { formatPrice } from '../../lib/format'
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -113,7 +114,7 @@ export function AdminReturnDetail() {
                   <td className="py-1.5">
                     {item.productName}
                     <span className="block text-xs text-neutral-500">
-                      {[formatAttributes(item.variantAttributes), `$${item.unitPrice} c/u`].filter(Boolean).join(' · ')}
+                      {[formatAttributes(item.variantAttributes), `${formatPrice(item.unitPrice)} c/u`].filter(Boolean).join(' · ')}
                     </span>
                     {item.condition && (
                       <span className="block text-xs text-neutral-500">
@@ -414,7 +415,7 @@ function Receive({ request, onDone }: ActionProps) {
 
         {!exchange && (
           <p className="text-neutral-700">
-            Reembolso a iniciar: <strong>${refundTotal.toFixed(2)}</strong> <span className="text-neutral-500">(sólo productos, sin envío)</span>
+            Reembolso a iniciar: <strong>{formatPrice(refundTotal)}</strong> <span className="text-neutral-500">(sólo productos, sin envío)</span>
           </p>
         )}
         {exchange && <p className="text-neutral-700">Cambio: no hay reembolso; la reposición queda pendiente de despacho.</p>}

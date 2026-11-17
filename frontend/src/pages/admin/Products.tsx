@@ -6,6 +6,7 @@ import { Table } from '../../components/ui/Table'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import type { AdminProduct, AdminProductVariant, ProductFormInput, VariantInput } from '../../types/product.types'
 import type { CategoryNode } from '../../types/category.types'
+import { formatPrice } from '../../lib/format'
 
 function extractErrorMessage(err: unknown, fallback: string): string {
   const message = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data
@@ -493,7 +494,7 @@ export function AdminProducts() {
             rowKey={(p) => p.id}
             columns={[
               { header: 'Nombre', render: (p) => p.name },
-              { header: 'Precio', render: (p) => `$${p.price}` },
+              { header: 'Precio', render: (p) => formatPrice(p.price) },
               { header: 'Categorías', render: (p) => p.categories.map((c) => c.name).join(', ') },
               {
                 header: 'Stock',

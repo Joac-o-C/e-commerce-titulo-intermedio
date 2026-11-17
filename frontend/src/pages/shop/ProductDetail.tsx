@@ -5,6 +5,7 @@ import { useCartMutations } from '../../features/cart/hooks/useCartMutations'
 import { useGuestCart } from '../../features/cart/hooks/useGuestCart'
 import { useAuthStore } from '../../store/auth.store'
 import type { InsufficientStockError } from '../../types/cart.types'
+import { formatPrice } from '../../lib/format'
 
 /** CU-09 Ver detalle de producto. */
 export function ProductDetail() {
@@ -122,7 +123,7 @@ export function ProductDetail() {
         <div>
           <h1 className="text-2xl font-semibold text-neutral-800">{product.name}</h1>
           {product.brand && <p className="text-sm text-neutral-500">{product.brand}</p>}
-          <p className="mt-2 text-xl font-medium text-neutral-800">${product.price}</p>
+          <p className="mt-2 text-xl font-medium text-neutral-800">{formatPrice(product.price)}</p>
           <p className="mt-1 text-sm text-neutral-600">{product.description}</p>
 
           {product.categories.length > 0 && (
@@ -232,7 +233,7 @@ export function ProductDetail() {
                   )}
                 </div>
                 <p className="mt-2 truncate text-sm font-medium text-neutral-800">{p.name}</p>
-                <p className="text-sm text-neutral-600">${p.price}</p>
+                <p className="text-sm text-neutral-600">{formatPrice(p.price)}</p>
               </Link>
             ))}
           </div>
