@@ -78,14 +78,25 @@ CI: en cada push y pull request, GitHub Actions (.github/workflows/ci.yml) corre
 
 # TODO:
 
-    - realizar cambios estéticos a frontend (charlar todo el equipo)
-    - mensajes genéricos en login (ahora dice contraseña/correo inválido)
-    - mostrar vía toast el mensaje de "cuenta bloqueada por 15 minutos" en frontend
-    - mostrar cuadro de confirmación para otorgar permisos de administrador
+Desarrollo general:
     - filtros en pestaña stock de admin
+    - revisar penalización de tiempo por intentos fallidos de inicio de sesión
     - ejecutable init para linux/windows que ejecute los comandos de iniciacion
 
-BUGFIXES:
+UX/UI:
+    - realizar cambios estéticos a frontend (charlar todo el equipo)
+    - modo oscuro (charlar primero, puede llegar a saturar la ui con muchos botones)
+
+Seguridad:
+
+    - protección contra ataques bruteforce desde múltiples IPs (clasificar en ip's de confianza, ver "device cookies" de Owasp)
+    - 2fa para perfiles administrador
+    - mail de aviso por inicio de sesión en dispositivo nuevo
+    - integración Have i been pwned (evita contraseñas filtradas)
+    - CAPTCHA(?)
+    - mostrar cuadro de confirmación para otorgar permisos de administrador
+
+# BUGFIXES:
 
 prioridad alta:
     - 
@@ -95,3 +106,4 @@ prioridad media:
 
 prioridad Baja:
     - bugfix hover catálogo: ubuntu linux firefox (el zoom de la imagen y la sombra de las tarjetas funcionan con la pantalla táctil pero no con el mouse; ver `frontend/src/components/catalog/ProductCard.tsx`) (severidad baja)
+    - el mensaje de bloqueo de cuenta se stackea, limitar a uno (inicio de sesión) (severidad baja)

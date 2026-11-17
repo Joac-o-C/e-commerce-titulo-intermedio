@@ -50,7 +50,7 @@ export function Layout() {
             )}
             <Link
               to="/cart"
-              aria-label={cartCount > 0 ? `Carrito, ${cartCount} ${plural(cartCount, 'producto', 'productos')}` : 'Carrito'}
+              aria-label={cartCount > 0 ? `Carrito, ${plural(cartCount, 'producto', 'productos')}` : 'Carrito'}
               className={NAV_LINK}
             >
               <span className="relative">

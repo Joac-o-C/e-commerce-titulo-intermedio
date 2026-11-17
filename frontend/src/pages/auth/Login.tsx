@@ -11,6 +11,8 @@ import { ProgressBar } from '../../components/ui/ProgressBar'
 import { SubmitButton } from '../../components/ui/SubmitButton'
 import { TextField } from '../../components/ui/TextField'
 import { PasswordField } from '../../components/ui/PasswordField'
+import { useToastStore } from '../../store/toast.store'
+import { loginErrorMessage } from './login-error'
 
 const schema = z.object({
   email: z.string().email('Email inválido'),
@@ -28,6 +30,7 @@ export function Login() {
   const returnTo = (location.state as { from?: string } | null)?.from ?? '/'
   const setSession = useAuthStore((state) => state.setSession)
   const [serverError, setServerError] = useState<string | null>(null)
+  const showToast = useToastStore((s) => s.show)
   // CU-06 (fusión del carrito de invitado): preview + confirmación en un
   // solo modal si hay conflictos; si no hay ninguno, se fusiona directo.
   const cartMerge = useCartMerge()
@@ -44,11 +47,10 @@ export function Login() {
     try {
       ;({ accessToken } = await authService.login(values.email, values.password))
     } catch (err: unknown) {
-      // CU-06 (flujos 5a/6a/7a/7b): el backend siempre responde con un
-      // mensaje que no distingue el motivo exacto salvo el bloqueo temporal.
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'No pudimos iniciar sesión';
+      // CU-06 (flujos 5a/6a/7a/7b): mensaje genérico salvo el bloqueo
+      // temporal, que además se avisa con un toast.
+      const { message, locked } = loginErrorMessage(err)
+      if (locked) showToast(message, 'warning')
       setServerError(message)
       return
     }
@@ -93,7 +95,11 @@ export function Login() {
             error={errors.password?.message}
           />
 
-          {serverError && <p className="text-sm text-red-600">{serverError}</p>}
+          {serverError && (
+            <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {serverError}
+            </p>
+          )}
 
           <SubmitButton loading={isSubmitting} loadingLabel="Iniciando sesión…">
             Iniciar sesión

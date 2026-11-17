@@ -22,6 +22,8 @@ interface ToastState {
 }
 
 const TOAST_DURATION_MS = 4000
+// Los avisos de advertencia (p. ej. cuenta bloqueada) se leen con más calma.
+const WARNING_DURATION_MS = 8000
 let nextId = 0
 
 /** Avisos temporales globales; los renderiza `Toaster` (dentro de `Layout`). */
@@ -30,7 +32,7 @@ export const useToastStore = create<ToastState>((set, get) => ({
   show: (message, tone = 'info', action) => {
     const id = ++nextId
     set({ toasts: [...get().toasts, { id, message, tone, action }] })
-    setTimeout(() => get().dismiss(id), TOAST_DURATION_MS)
+    setTimeout(() => get().dismiss(id), tone === 'warning' ? WARNING_DURATION_MS : TOAST_DURATION_MS)
   },
   dismiss: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
 }))
