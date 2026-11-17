@@ -84,8 +84,7 @@ Desarrollo general:
     - ejecutable init para linux/windows que ejecute los comandos de iniciacion
 
 UX/UI:
-    - realizar cambios estéticos a frontend (charlar todo el equipo)
-    - modo oscuro (charlar primero, puede llegar a saturar la ui con muchos botones)
+    - decidir tema con equipo
 
 Seguridad:
 
