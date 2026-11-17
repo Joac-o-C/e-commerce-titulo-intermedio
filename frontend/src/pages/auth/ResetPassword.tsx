@@ -55,7 +55,7 @@ export function ResetPassword() {
 
   if (done) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+      <main className="flex justify-center px-4 py-12 sm:py-16">
         <div className="max-w-sm text-center space-y-3">
           <p className="text-neutral-800">Contraseña actualizada, ya podés iniciar sesión.</p>
           <Link to="/login" className="underline text-sm">Ir a iniciar sesión</Link>
@@ -65,7 +65,7 @@ export function ResetPassword() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+    <main className="flex justify-center px-4 py-12 sm:py-16">
       <form
         onSubmit={handleSubmit(onSubmit)}
         aria-busy={isSubmitting}

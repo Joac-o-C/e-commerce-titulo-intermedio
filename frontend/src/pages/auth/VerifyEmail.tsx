@@ -40,7 +40,7 @@ export function VerifyEmail() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+    <main className="flex justify-center px-4 py-12 sm:py-16">
       <div
         aria-busy={status === 'verifying' || isResending}
         className="w-full max-w-sm overflow-hidden rounded-lg bg-white shadow text-center"

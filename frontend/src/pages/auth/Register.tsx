@@ -54,7 +54,7 @@ export function Register() {
 
   if (submitted) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+      <main className="flex justify-center px-4 py-12 sm:py-16">
         <p className="max-w-sm text-center text-neutral-700">
           Revisá tu casilla de correo para activar la cuenta.
         </p>
@@ -63,7 +63,7 @@ export function Register() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+    <main className="flex justify-center px-4 py-12 sm:py-16">
       <form
         onSubmit={handleSubmit(onSubmit)}
         aria-busy={isSubmitting}

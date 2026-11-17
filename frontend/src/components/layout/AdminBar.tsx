@@ -10,7 +10,7 @@ interface Badge {
 
 function Item({ to, label, badges = [] }: { to: string; label: string; badges?: Badge[] }) {
   return (
-    <span className="flex items-center gap-1">
+    <span className="flex shrink-0 items-center gap-1">
       <NavLink
         to={to}
         className={({ isActive }) => (isActive ? 'font-medium text-neutral-900' : 'text-neutral-600 hover:text-neutral-900')}
@@ -38,50 +38,59 @@ export function AdminBar() {
 
   return (
     <div className="border-t border-neutral-100 bg-neutral-100">
-      <nav className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-1 px-4 py-2 text-sm">
-        <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Admin</span>
-        <Item
-          to="/admin/orders"
-          label="Pedidos"
-          badges={[
-            {
-              count: summary?.refundsNeedingAttention ?? 0,
-              to: '/admin/orders?refunds=requieren_gestion',
-              title: 'Reembolsos que requieren gestión',
-              tone: 'bg-red-600 text-white',
-            },
-          ]}
-        />
-        <Item
-          to="/admin/returns"
-          label="Posventa"
-          badges={[
-            {
-              count: summary?.returnsPending ?? 0,
-              to: '/admin/returns?status=solicitada',
-              title: 'Solicitudes por resolver',
-              tone: 'bg-amber-500 text-white',
-            },
-            {
-              count: summary?.returnsOverdue ?? 0,
-              to: '/admin/returns?reception=vencidas',
-              title: 'Devoluciones con plazo de recepción vencido',
-              tone: 'bg-red-600 text-white',
-            },
-            {
-              count: summary?.replacementsPending ?? 0,
-              to: '/admin/returns?replacements=pendientes',
-              title: 'Reposiciones pendientes de despacho',
-              tone: 'bg-blue-600 text-white',
-            },
-          ]}
-        />
-        <Item to="/admin/products" label="Productos" />
-        <Item to="/admin/categories" label="Categorías" />
-        <Item to="/admin/stock" label="Stock" />
-        <Item to="/admin/shipping-methods" label="Envíos" />
-        {fakeGateway && <Item to="/admin/fake-gateway" label="Pasarela simulada" />}
-      </nav>
+      <div className="mx-auto flex max-w-6xl flex-col gap-0.5 px-4 py-2 sm:flex-row sm:items-center sm:gap-4">
+        {/* Fijo, fuera de la parte que se desliza: es el título de la barra, no un link más. */}
+        <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-neutral-500 sm:border-r sm:border-neutral-300 sm:pr-4">
+          Panel de administración
+        </span>
+        {/* Una sola fila: en pantallas chicas se desliza de costado en vez de partirse en varias líneas. */}
+        <nav
+          aria-label="Administración"
+          className="-mx-4 flex min-w-0 items-center gap-x-5 overflow-x-auto whitespace-nowrap px-4 py-1 text-sm [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
+        >
+          <Item
+            to="/admin/orders"
+            label="Pedidos"
+            badges={[
+              {
+                count: summary?.refundsNeedingAttention ?? 0,
+                to: '/admin/orders?refunds=requieren_gestion',
+                title: 'Reembolsos que requieren gestión',
+                tone: 'bg-red-600 text-white',
+              },
+            ]}
+          />
+          <Item
+            to="/admin/returns"
+            label="Posventa"
+            badges={[
+              {
+                count: summary?.returnsPending ?? 0,
+                to: '/admin/returns?status=solicitada',
+                title: 'Solicitudes por resolver',
+                tone: 'bg-amber-500 text-white',
+              },
+              {
+                count: summary?.returnsOverdue ?? 0,
+                to: '/admin/returns?reception=vencidas',
+                title: 'Devoluciones con plazo de recepción vencido',
+                tone: 'bg-red-600 text-white',
+              },
+              {
+                count: summary?.replacementsPending ?? 0,
+                to: '/admin/returns?replacements=pendientes',
+                title: 'Reposiciones pendientes de despacho',
+                tone: 'bg-blue-600 text-white',
+              },
+            ]}
+          />
+          <Item to="/admin/products" label="Productos" />
+          <Item to="/admin/categories" label="Categorías" />
+          <Item to="/admin/stock" label="Stock" />
+          <Item to="/admin/shipping-methods" label="Envíos" />
+          {fakeGateway && <Item to="/admin/fake-gateway" label="Pasarela simulada" />}
+        </nav>
+      </div>
     </div>
   )
 }

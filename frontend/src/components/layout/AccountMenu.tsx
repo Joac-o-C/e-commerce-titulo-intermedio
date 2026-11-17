@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLogout } from '../../features/auth/useLogout'
+import { UserIcon } from './icons'
 
 const ITEM_CLASSES = 'block w-full px-4 py-2 text-left text-neutral-700 hover:bg-neutral-100 focus:bg-neutral-100 focus:outline-none'
 
 /** Menú "Mi cuenta" del header: direcciones (CU-12) y cerrar sesión (CU-10). */
-export function AccountMenu() {
+export function AccountMenu({ triggerClassName = '' }: { triggerClassName?: string }) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const logout = useLogout()
@@ -33,11 +34,13 @@ export function AccountMenu() {
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label="Mi cuenta"
         onClick={() => setOpen((value) => !value)}
-        className="flex items-center gap-1 text-neutral-600 hover:text-neutral-900"
+        className={triggerClassName}
       >
-        Mi cuenta
-        <span aria-hidden="true" className={`text-xs transition-transform ${open ? 'rotate-180' : ''}`}>
+        <UserIcon />
+        <span className="hidden sm:inline">Mi cuenta</span>
+        <span aria-hidden="true" className={`hidden text-xs transition-transform sm:inline ${open ? 'rotate-180' : ''}`}>
           ▾
         </span>
       </button>
