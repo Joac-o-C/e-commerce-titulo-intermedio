@@ -3,45 +3,54 @@ proyecto académico con un e-commerce completamente funcional, aplicando lo vist
 
 La estructura general del proyecto es la siguiente:
 
-# esquema de directorios:
+## Esquema de directorios
 
+```text
 root/
 ├── backend/
 │   ├── src/
+│   │   ├── main.ts                     # Punto de entrada de NestJS
+│   │   ├── app.module.ts
 │   │   ├── config/                     # Variables de entorno, validación de config
 │   │   ├── common/                     # Guards, Filters, Interceptors, Decorators, Pipes
+│   │   ├── migrations/                 # Migraciones de TypeORM
+│   │   ├── seed/                       # Datos de demo (npm run seed)
 │   │   ├── providers/
-│   │   │   ├── database/               # TypeOrmModule config, data source
+│   │   │   ├── database/               # Config de TypeOrmModule, data source
 │   │   │   ├── mail/
 │   │   │   └── storage/
 │   │   └── modules/
 │   │       ├── auth/                   # JWT, Local strategy, Refresh tokens
-│   │       ├── users/                  # Clientes, Admins, Roles
+│   │       ├── users/                  # Clientes, Admins, Roles, direcciones
 │   │       ├── products/
-│   │       │   └── categories/
+│   │       │   ├── categories/
+│   │       │   └── stock/
 │   │       ├── cart/
 │   │       ├── orders/
 │   │       ├── payments/               # Webhooks e integración MercadoPago
-│   │       └── health/                 # Terminus health checks
-│   ├── test/
-│   ├── main.ts
-│   └── envExample                     
+│   │       ├── notifications/
+│   │       └── health/                 # Health checks con Terminus
+│   ├── test/                           # Tests e2e
+│   └── envExample
 │
 └── frontend/
     ├── src/
-    │   ├── pages/                      
-    │   │   ├── shop/                   # Home, /products, /
-    │   │   ├── auth/                   # /login, /register
-    │   │   ├── account/                # /profile, /orders
+    │   ├── pages/
+    │   │   ├── shop/                   # Catálogo (/), detalle de producto, carrito
+    │   │   ├── auth/                   # /login, /register, recuperar contraseña
+    │   │   ├── account/                # Pedidos, direcciones, checkout
+    │   │   ├── checkout/               # Pago simulado y resultado del pago
     │   │   └── admin/                  # Panel administrativo
-    │   ├── router/                     # Definición de ruta
-    │   ├── components/                 # UI atómicos (Butto
-    │   ├── features/                   # Lógica de dominio mentForm)
-    │   ├── services/                   # Clientes API / fetchers
+    │   ├── router/                     # Definición de rutas
+    │   ├── components/                 # Componentes de UI reutilizables (Button, Table, Toaster…)
+    │   ├── features/                   # Lógica de dominio (hooks y componentes por módulo)
+    │   ├── services/                   # Clientes de la API / fetchers
     │   ├── store/                      # Stores de Zustand
-    │   ├── styles/                     # Config/entry de Ta
-    │   └── types/                      # Interfaces TypeScr
+    │   ├── styles/                     # Entry de Tailwind y tema
+    │   ├── types/                      # Interfaces de TypeScript
+    │   └── test/                       # Setup de Vitest
     └── envExample
+```
 
 # comandos para levantar todo
 
@@ -78,33 +87,38 @@ CI: en cada push y pull request, GitHub Actions (.github/workflows/ci.yml) corre
 
 # TODO:
 
-Desarrollo general:
-    - filtros en pestaña stock de admin
-    - revisar penalización de tiempo por intentos fallidos de inicio de sesión
-    - ejecutable init para linux/windows que ejecute los comandos de iniciacion
-    - optimización codebase teniendo en cuenta SOLID, GRASP y patrones diseño.
+**Desarrollo general:**
 
-UX/UI:
-    - decidir tema con equipo
+- [ ] filtros en pestaña stock de admin
+- [ ] revisar penalización de tiempo por intentos fallidos de inicio de sesión
+- [ ] ejecutable init para linux/windows que ejecute los comandos de iniciacion
+- [ ] optimización codebase teniendo en cuenta SOLID, GRASP y patrones diseño.
 
-Seguridad:
+**UX/UI:**
 
-    - protección contra ataques bruteforce desde múltiples IPs (clasificar en ip's de confianza, ver "device cookies" de Owasp)
-    - 2fa para perfiles administrador
-    - mail de aviso por inicio de sesión en dispositivo nuevo
-    - integración Have i been pwned (evita contraseñas filtradas)
-    - CAPTCHA(?)
-    - mostrar cuadro de confirmación para otorgar permisos de administrador
-    - perfil superadmin para desarrolladores
+- [ ] decidir tema con equipo
+
+**Seguridad:**
+
+- [ ] protección contra ataques bruteforce desde múltiples IPs (clasificar en ip's de confianza, ver "device cookies" de Owasp)
+- [ ] 2fa para perfiles administrador
+- [ ] mail de aviso por inicio de sesión en dispositivo nuevo
+- [ ] integración Have i been pwned (evita contraseñas filtradas)
+- [ ] CAPTCHA(?)
+- [ ] mostrar cuadro de confirmación para otorgar permisos de administrador
+- [ ] perfil superadmin para desarrolladores
 
 # BUGFIXES:
 
-prioridad alta:
-    - 
+**Prioridad alta:**
 
-prioridad media:
-    - producto no se deshabilita al reservar totalmente el stock, solo muestra mensaje al momento de agregar al carrito, mejora UX (severidad media)
+- (nada por ahora)
 
-prioridad Baja:
-    - bugfix hover catálogo: ubuntu linux firefox (el zoom de la imagen y la sombra de las tarjetas funcionan con la pantalla táctil pero no con el mouse; ver `frontend/src/components/catalog/ProductCard.tsx`) (severidad baja)
-    - el mensaje de bloqueo de cuenta se stackea, limitar a uno (inicio de sesión) (severidad baja)
+**Prioridad media:**
+
+- [ ] producto no se deshabilita al reservar totalmente el stock, solo muestra mensaje al momento de agregar al carrito, mejora UX (severidad media)
+
+**Prioridad baja:**
+
+- [ ] bugfix hover catálogo: ubuntu linux firefox (el zoom de la imagen y la sombra de las tarjetas funcionan con la pantalla táctil pero no con el mouse; ver `frontend/src/components/catalog/ProductCard.tsx`) (severidad baja)
+- [ ] el mensaje de bloqueo de cuenta se stackea, limitar a uno (inicio de sesión) (severidad baja)
